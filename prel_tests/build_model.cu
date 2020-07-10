@@ -43,6 +43,10 @@ __device__ int32_t state1D_from_ij(int32_t*  posid, int32_t T){
     return (posid[1] + posid[0]*gridDim.x + (T*gridDim.x*gridDim.y) ) ; 
 }
 
+__device__ int32_t get_rzn_id(){
+
+    return (blockIdx.z * blockDim.x)  + threadIdx.x;
+}
 
 __device__ bool is_edge_state(int32_t i, int32_t j){
     // n = gsize -1 that is the last index of the domain assuming square domain
@@ -233,7 +237,7 @@ __device__ void extract_velocity(float* vx, float* vy, int32_t T, float* all_u_m
     //thread index. also used to access resultant vxrzns[nrzns, gsize, gsize]
     int32_t idx = get_thread_idx();
     //rzn index to identify which of the 5k rzn it is. used to access all_Yi.
-    int32_t rzn_id = (blockIdx.z * blockDim.x)  + threadIdx.x ;
+    int32_t rzn_id = get_rzn_id() ;
     //mean_id is the index used to access the flattened all_u_mat[t,i,j].
     int32_t mean_id = state1D_from_thread(T);
     //to access all_ui_mat and all_vi_mat
@@ -278,11 +282,13 @@ __global__ void transition_calc(float* T_arr, float* all_u_mat, float* all_v_mat
     int32_t is_stationary = params[11];
     int32_t T = (int32_t)T_arr[0];
     int32_t idx = get_thread_idx();
+    int32_t new_idx;
     float vx, vy;
-    if(idx < gridDim.x*gridDim.y*nrzns)
+    if(idx < gridDim.x*gridDim.y*nrzns) //or idx < arr_size
     {
         int32_t posids[2] = {blockIdx.y, blockIdx.x};    //static declaration of array of size 2 to hold i and j values of S1. 
         int32_t sp_id;      //sp_id is space_id. S1%(gsize*gsize)
+        int32_t rzn_id = get_rzn_id();
         //  Afer move() these will be overwritten by i and j values of S2
         float r;              // to store immediate reward
         extract_velocity(&vx, &vy, T, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi, params);
@@ -300,10 +306,12 @@ __global__ void transition_calc(float* T_arr, float* all_u_mat, float* all_v_mat
             S1 = state1D_from_thread(T);     //get init state number corresponding to thread id
             S2 = state1D_from_ij(posids, T+1);   //get successor state number corresponding to posid and next timestep T+1        
             sp_id = S1%(gsize*gsize);
+            new_idx = rzn_id + (sp_id*nrzns);
         }
         //writing to sumR_sa. this array will later be divided by num_rzns, to get the avg
         float a = atomicAdd(&sumR_sa[sp_id], r); //TODO: try reduction if this is slow overall
-        results[idx] = S2;
+        // results[idx] = S2; // each chunk is ncells of one rzn. 
+        results[new_idx] = S2;  // each chunk all rzns of one S1
         __syncthreads();
         /*if (threadIdx.x == 0 && blockIdx.z == 0)
         {
@@ -356,7 +364,9 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
 
 
     int ncells = gsize*gsize;
-    thrust::host_vector<float> H_S2_vec(ncells*num_rzns, -1); //eqv of results
+    int arr_size = ncells * num_rzns;
+
+    thrust::host_vector<float> H_S2_vec(arr_size, -1); //eqv of results
     thrust::host_vector<float> H_sumR_sa(ncells, 0);
     
     // array of num_actions device_vectors for S2_vec's
@@ -371,6 +381,12 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
     for(int n = 0; n < num_actions; n++){
         D_arr_sumR_sa[n] = thrust::device_vector<float>(ncells, 0);
     }
+
+    // TESTING master array
+    int master_arr_size = arr_size*num_actions;
+    thrust::device_vector<float> master_S2_vector(master_arr_size);
+    float* master_S2_arr = thrust::raw_pointer_cast(&master_S2_vector[0]);
+
 
     std::cout<<"gisze= " << gsize << std::endl;
     std::cout<<"g.z = " << (num_rzns/bDimx) + 1 << std::endl;
@@ -387,8 +403,13 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
         float* sumR_sa = thrust::raw_pointer_cast(&D_arr_sumR_sa[n][0]);
         float* S2_arr = thrust::raw_pointer_cast(&D_arr_S2vecs[n][0]);
 
+        // TODO: call in streams
+        // pass pointer to vector from array of vectors
+        // transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
+        //     ac_angle, xs, ys, params, sumR_sa, S2_arr);
+        // pass pointer to master array
         transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-            ac_angle, xs, ys, params, sumR_sa, S2_arr);
+            ac_angle, xs, ys, params, master_S2_arr + n*arr_size, S2_arr);
 
         // cudaDeviceSynchronize();
 
