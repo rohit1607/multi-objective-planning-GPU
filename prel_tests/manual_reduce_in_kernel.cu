@@ -28,8 +28,8 @@ float my_mod(){
 typedef thrust::device_vector<float>::iterator  dIter;
 
 
-// count_kernel<<<ncells*num_actions,1>>>(ip_master_arr_ptr, nrzns, num_uq_s2_ptr)
-__global__ void count_kernel(float* ip_master_arr_ptr, int nrzns, float* num_uq_s2_ptr) {
+// count_kernel<<<ncells*num_actions,1>>>(D_master_S2_arr_ip, nrzns, num_uq_s2_ptr)
+__global__ void count_kernel(float* D_master_S2_arr_ip, int nrzns, float* num_uq_s2_ptr) {
     //reduction by key and fills in the 3 op_arrays like coo rows.
 
     int tid = blockIdx.x;
@@ -42,7 +42,7 @@ __global__ void count_kernel(float* ip_master_arr_ptr, int nrzns, float* num_uq_
     if (tid < nblocks){
         
         for(int i = 0; i < nrzns; i++){
-            new_s2 = ip_master_arr_ptr[start_idx + i];
+            new_s2 = D_master_S2_arr_ip[start_idx + i];
 
             if ( new_s2 != old_s2){
                 count++;
@@ -56,8 +56,8 @@ __global__ void count_kernel(float* ip_master_arr_ptr, int nrzns, float* num_uq_
     return;
 }
 
-// reduce_kernel<<<nblocks,1>>>(ip_master_arr_ptr, nrzns, nnz_xa, op_s1_ptr, op_s2_ptr, op_cnt_ptr, num_uq_s2_ptr);
-__global__ void reduce_kernel(float* ip_master_arr_ptr, int nrzns, int nnz_xa, float* op_s1_ptr, float* op_s2_ptr, float* op_cnt_ptr, float* num_uq_s2_ptr, float* prSum_num_uq_s2_ptr){
+// reduce_kernel<<<nblocks,1>>>(D_master_S2_arr_ip, nrzns, nnz_xa, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, num_uq_s2_ptr);
+__global__ void reduce_kernel(float* D_master_S2_arr_ip, int nrzns, int nnz_xa, float* D_coo_s1_arr, float* D_coo_s2_arr, float* D_coo_cnt_arr, float* num_uq_s2_ptr, float* prSum_num_uq_s2_ptr){
    
     int tid = blockIdx.x;
     int nblocks = gridDim.x;  //ncells*num_actions
@@ -68,7 +68,7 @@ __global__ void reduce_kernel(float* ip_master_arr_ptr, int nrzns, int nnz_xa, f
 
     int ith_nuq = 0; //ranges from 0 to n_uqs , to index number between 0 and n_uqs
 
-    float old_s2 = ip_master_arr_ptr[start_idx];
+    float old_s2 = D_master_S2_arr_ip[start_idx];
     float new_s2;
     float count = 0; //first if eval will lead to else condition and do  count++ 
 
@@ -77,13 +77,13 @@ __global__ void reduce_kernel(float* ip_master_arr_ptr, int nrzns, int nnz_xa, f
 
         float s1 = tid; // TODO: change this to nbe a function of a arguments: sp_id and t
         for(int i = 0; i< n_uqs; i++)
-            op_s1_ptr[op_st_id + i] = s1;
+            D_coo_s1_arr[op_st_id + i] = s1;
 
         for(int i = 0; i< nrzns; i++){
-            new_s2 = ip_master_arr_ptr[start_idx + i];
+            new_s2 = D_master_S2_arr_ip[start_idx + i];
             if (new_s2 != old_s2){                              // on encountering new value in the sorted array
-                op_s2_ptr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
-                op_cnt_ptr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
+                D_coo_s2_arr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
+                D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
                 ith_nuq++;                                      // increment i
                 count = 1;      //restart count on encounter new element
             }
@@ -96,8 +96,8 @@ __global__ void reduce_kernel(float* ip_master_arr_ptr, int nrzns, int nnz_xa, f
 
         // to store information about the last of n_uqs S2s
         if (ith_nuq < n_uqs ){   //this condition should always be true because i assert ith_nuq == n_uqs - 1
-            op_s2_ptr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
-            op_cnt_ptr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
+            D_coo_s2_arr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
+            D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
             ith_nuq++;                                      // increment i
         }
 
@@ -125,7 +125,7 @@ __device__ void insertionSort(float* arr, int n){
     }  
 }  
 
-__global__ void insertion_sort_master(float* ip_master_arr_ptr, int master_arr_size, int block_size){
+__global__ void insertion_sort_master(float* D_master_S2_arr_ip, int master_arr_size, int block_size){
 
     int tid = blockIdx.x;
     int nblocks = gridDim.x;  //ncells*num_actions
@@ -133,7 +133,7 @@ __global__ void insertion_sort_master(float* ip_master_arr_ptr, int master_arr_s
                                     // block_size = nrzns
 
     if (tid < nblocks){
-        insertionSort(ip_master_arr_ptr + start_idx, block_size);
+        insertionSort(D_master_S2_arr_ip + start_idx, block_size);
         //sort array starting from star_idx and of size block_size
     }
 
@@ -196,11 +196,11 @@ int main(){
 
     auto mid = high_resolution_clock::now(); 
 
-        float* ip_master_arr_ptr = thrust::raw_pointer_cast(&master_S2_vector[0]);
+        float* D_master_S2_arr_ip = thrust::raw_pointer_cast(&master_S2_vector[0]);
         thrust::stable_sort_by_key(master_S2_vector.begin(), master_S2_vector.end(), D_master_vals.begin());
         thrust::stable_sort_by_key(D_master_vals.begin(), D_master_vals.end(), master_S2_vector.begin());
         
-        // insertion_sort_master<<<nblocks,1>>>(ip_master_arr_ptr, master_arr_size, nrzns);
+        // insertion_sort_master<<<nblocks,1>>>(D_master_S2_arr_ip, master_arr_size, nrzns);
         
         cudaDeviceSynchronize();
 
@@ -232,19 +232,19 @@ int main(){
 
     auto red_start = high_resolution_clock::now(); 
 
-        count_kernel<<<nblocks,1>>>(ip_master_arr_ptr, nrzns, num_uq_s2_ptr);
+        count_kernel<<<nblocks,1>>>(D_master_S2_arr_ip, nrzns, num_uq_s2_ptr);
 
         int nnz_xa = (int) thrust::reduce(D_num_uq_s2.begin(), D_num_uq_s2.end(), (float) 0, thrust::plus<float>());
-        thrust::device_vector<float> D_s1(nnz_xa);
-        thrust::device_vector<float> D_s2(nnz_xa);
-        thrust::device_vector<float> D_count(nnz_xa);
-        float* op_s1_ptr = thrust::raw_pointer_cast(&D_s1[0]);
-        float* op_s2_ptr = thrust::raw_pointer_cast(&D_s2[0]);
-        float* op_cnt_ptr = thrust::raw_pointer_cast(&D_count[0]);
+        thrust::device_vector<float> D_coo_s1(nnz_xa);
+        thrust::device_vector<float> D_coo_s2(nnz_xa);
+        thrust::device_vector<float> D_coo_count(nnz_xa);
+        float* D_coo_s1_arr = thrust::raw_pointer_cast(&D_coo_s1[0]);
+        float* D_coo_s2_arr = thrust::raw_pointer_cast(&D_coo_s2[0]);
+        float* D_coo_cnt_arr = thrust::raw_pointer_cast(&D_coo_count[0]);
 
         thrust::exclusive_scan(D_num_uq_s2.begin(), D_num_uq_s2.end(), D_prSum_num_uq_s2.begin());
 
-        reduce_kernel<<<nblocks,1>>>(ip_master_arr_ptr, nrzns, nnz_xa, op_s1_ptr, op_s2_ptr, op_cnt_ptr, num_uq_s2_ptr, prSum_num_uq_s2_ptr);
+        reduce_kernel<<<nblocks,1>>>(D_master_S2_arr_ip, nrzns, nnz_xa, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, num_uq_s2_ptr, prSum_num_uq_s2_ptr);
 
     auto red_end = high_resolution_clock::now(); 
     
@@ -264,7 +264,7 @@ int main(){
     // check coo
     std::cout << "coo vals" << std::endl;
     for(int i = 0; i < n_print; i++)
-        std::cout << D_s1[i] << " , " << D_s2[i] << " , " << D_count[i] << std::endl;
+        std::cout << D_coo_s1[i] << " , " << D_coo_s2[i] << " , " << D_coo_count[i] << std::endl;
     std::cout << std::endl;
 
 

@@ -9,7 +9,9 @@
 // #include "read_npy_files.h"
 // #include "grid.h"
 #include <cmath>
-
+#include <stdlib.h>
+#include <chrono>
+using namespace std::chrono;
 
 #include <iostream>
 
@@ -313,15 +315,89 @@ __global__ void transition_calc(float* T_arr, float* all_u_mat, float* all_v_mat
         // results[idx] = S2; // each chunk is ncells of one rzn. 
         results[new_idx] = S2;  // each chunk all rzns of one S1
         __syncthreads();
-        /*if (threadIdx.x == 0 && blockIdx.z == 0)
-        {
-            sumR_sa[S1] = sumR_sa[S1]/nrzns;    //TODO: change name to R_sa from sumR_sa since were not storing sum anymore
-        }
-    */
+        if (threadIdx.x == 0 && blockIdx.z == 0)
+            sumR_sa[sp_id] = sumR_sa[sp_id]/nrzns;    //TODO: xxdone sumR_sa is now actually meanR_sa!
+
+
     }//if ends
     return;
 }
 
+__global__ void count_kernel(float* D_master_S2_arr_ip, int nrzns, float* num_uq_s2_ptr) {
+
+    int tid = blockIdx.x;
+    int nblocks = gridDim.x;  //ncells*num_actions
+    float count = 0;
+    float old_s2 = -1;
+    float new_s2;
+    int start_idx = tid*nrzns;
+
+    if (tid < nblocks){
+        
+        for(int i = 0; i < nrzns; i++){
+            new_s2 = D_master_S2_arr_ip[start_idx + i];
+
+            if ( new_s2 != old_s2){
+                count++;
+            }
+            
+            old_s2 = new_s2;
+        }
+
+        num_uq_s2_ptr[tid] = count;
+    }
+
+    return;
+}
+
+
+__global__ void reduce_kernel(float* D_master_S2_arr_ip, int t, int ncells, int nrzns, int nnz_xa, float* D_coo_s1_arr, float* D_coo_s2_arr, float* D_coo_cnt_arr, float* num_uq_s2_ptr, float* prSum_num_uq_s2_ptr){
+   
+    int tid = blockIdx.x;
+    int nblocks = gridDim.x;  //ncells*num_actions
+    int start_idx = tid*nrzns; // to access tid'th threads 0-pos in ip_arr
+
+    int n_uqs = num_uq_s2_ptr[tid]; //number of unique S2s for tid'th block
+    int op_st_id = prSum_num_uq_s2_ptr[tid];   //sum of number of uniqeu S2s uptil tid'th block. to access tid'th thread's 0-pos in op_arr
+
+    int ith_nuq = 0; //ranges from 0 to n_uqs , to index number between 0 and n_uqs
+
+    float old_s2 = D_master_S2_arr_ip[start_idx];
+    float new_s2;
+    float count = 0; //first if eval will lead to else condition and do  count++ 
+
+
+    if (tid < nblocks){
+
+        float s1 = (tid%ncells) + (t*ncells); // TODO:xxdone change this to nbe a function of a arguments: sp_id and t
+        for(int i = 0; i< n_uqs; i++)
+            D_coo_s1_arr[op_st_id + i] = s1;
+
+        for(int i = 0; i< nrzns; i++){
+            new_s2 = D_master_S2_arr_ip[start_idx + i];
+            if (new_s2 != old_s2){                              // on encountering new value in the sorted array
+                D_coo_s2_arr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
+                D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
+                ith_nuq++;                                      // increment i
+                count = 1;      //restart count on encounter new element
+            }
+            else
+                count++;
+
+            old_s2 = new_s2;
+
+        }
+
+        // to store information about the last of n_uqs S2s
+        if (ith_nuq < n_uqs ){   //this condition should always be true because i assert ith_nuq == n_uqs - 1
+            D_coo_s2_arr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
+            D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
+            ith_nuq++;                                      // increment i
+        }
+
+   }
+   return;
+}
 
 
 
@@ -329,8 +405,13 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
                                         float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                         float*  D_all_vi_arr, float*  D_all_yi_arr,
                                         thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
-                                        thrust::device_vector<float> &D_ys, thrust::device_vector<float> &D_ac_angles 
-                                        //TODO: ,output_data 
+                                        thrust::device_vector<float> &D_ys, thrust::host_vector<float> &H_ac_angles,
+                                        thrust::device_vector<float> &D_master_vals,
+                                        thrust::host_vector<float> &H_coo_len_per_ac,
+                                        thrust::host_vector<float>* H_Aarr_of_cooS1,
+                                        thrust::host_vector<float>* H_Aarr_of_cooS2,
+                                        thrust::host_vector<float>* H_Aarr_of_cooProb,
+                                        thrust::host_vector<float>* H_Aarr_of_Rs
                                         );
 // void concatenate_results_across_time();
 
@@ -339,18 +420,23 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
                                         float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                         float*  D_all_vi_arr, float*  D_all_yi_arr,
                                         thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
-                                        thrust::device_vector<float> &D_ys, thrust::device_vector<float> &D_ac_angles 
-                                        //TODO: ,output_data 
+                                        thrust::device_vector<float> &D_ys, thrust::host_vector<float> &H_ac_angles,
+                                        thrust::device_vector<float> &D_master_vals,
+                                        thrust::host_vector<float> &H_coo_len_per_ac,
+                                        thrust::host_vector<float>* H_Aarr_of_cooS1,
+                                        thrust::host_vector<float>* H_Aarr_of_cooS2,
+                                        thrust::host_vector<float>* H_Aarr_of_cooProb,
+                                        thrust::host_vector<float>* H_Aarr_of_Rs
                                         ){
 
     int gsize = (int) D_params[0];
     int num_actions =  (int)D_params[1];
     int num_rzns = (int) D_params[2];
 
-    // check velocity data and vector data
-    std::cout << "D_paramas" << std::endl;
-    for (int i = 0; i< 10; i ++)
-        std::cout << D_params[i] << std::endl;
+    // // check velocity data and vector data
+    // std::cout << "D_paramas" << std::endl;
+    // for (int i = 0; i< 10; i ++)
+    //     std::cout << D_params[i] << std::endl;
 
     // I think doing it this way does not issue a memcpy at the backend. thats why it fails
     // std::cout << "D_all_u_arr" << std::endl;
@@ -369,144 +455,237 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
     thrust::host_vector<float> H_S2_vec(arr_size, -1); //eqv of results
     thrust::host_vector<float> H_sumR_sa(ncells, 0);
     
-    // array of num_actions device_vectors for S2_vec's
-    thrust::device_vector<float> D_arr_S2vecs[num_actions];
-    for(int n = 0; n < num_actions; n++){
-        D_arr_S2vecs[n] = thrust::device_vector<float>(ncells*num_rzns, -1);
-    }
 
-    // array of num_actions decive_vvectors for sum_Rsa_vec
-    // initialasation with 0 is important. because values are added to this
-    thrust::device_vector<float> D_arr_sumR_sa[num_actions];
-    for(int n = 0; n < num_actions; n++){
-        D_arr_sumR_sa[n] = thrust::device_vector<float>(ncells, 0);
-    }
+    // initialise master sum_Rsa array - sumRsa's concated across all actions
+    // Important to initialise it with 0
+    thrust::device_vector<float> D_master_sumRsa_vector(ncells*num_actions, 0);
+    float* D_master_sumRsa_arr = thrust::raw_pointer_cast(&D_master_sumRsa_vector[0]);
 
-    // TESTING master array
+    // initialse master S2 array -  S2_array concated across all actions
     int master_arr_size = arr_size*num_actions;
-    thrust::device_vector<float> master_S2_vector(master_arr_size);
-    float* master_S2_arr = thrust::raw_pointer_cast(&master_S2_vector[0]);
+    thrust::device_vector<float> D_master_S2_vector(master_arr_size);
+    float* D_master_S2_arr = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
 
 
     std::cout<<"gisze= " << gsize << std::endl;
     std::cout<<"g.z = " << (num_rzns/bDimx) + 1 << std::endl;
     std::cout<<"bDimx = " <<  bDimx << std::endl;
+    //Define Kernel launch parameters
     dim3 DimGrid(gsize, gsize, (num_rzns/bDimx) + 1);
     dim3 DimBlock(bDimx, 1, 1);
 
     //launch kernel (n, t, rest_of_data) for each actions
     for(int n = 0; n < num_actions; n++){
 
-        std::cout <<  std::endl <<"     a = " << n << std::endl;
-        // TODO: ac_angles host vector instead of device
-        float ac_angle = D_ac_angles[n];
-        float* sumR_sa = thrust::raw_pointer_cast(&D_arr_sumR_sa[n][0]);
-        float* S2_arr = thrust::raw_pointer_cast(&D_arr_S2vecs[n][0]);
+        // std::cout <<  std::endl <<"     a = " << n << std::endl;
+        float ac_angle = H_ac_angles[n];
 
-        // TODO: call in streams
-        // pass pointer to vector from array of vectors
-        // transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-        //     ac_angle, xs, ys, params, sumR_sa, S2_arr);
-        // pass pointer to master array
+        // launch kernel for @a @t
         transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-            ac_angle, xs, ys, params, master_S2_arr + n*arr_size, S2_arr);
+            ac_angle, xs, ys, params, D_master_sumRsa_arr + n*ncells, D_master_S2_arr + n*arr_size);
 
         // cudaDeviceSynchronize();
 
-        // copy data back to host
-        H_S2_vec = D_arr_S2vecs[n];
-        H_sumR_sa = D_arr_sumR_sa[n];
-        std::cout << "post kernel" << std::endl;
-        for(int i = 0; i < 10; i ++)
-            std::cout << H_sumR_sa[i] << std::endl;
-        for(int i = 0; i < 10; i ++)
-            std::cout << H_S2_vec[i] << std::endl;
+        // // CHECK copy data back to host for check
+        // thrust::copy(D_master_S2_vector.begin() + n*arr_size, D_master_S2_vector.begin() + (n+1)*arr_size, H_S2_vec.begin());
+        // thrust::copy(D_master_sumRsa_vector.begin() + n*ncells, D_master_sumRsa_vector.begin() + (n+1)*ncells, H_sumR_sa.begin());
+        // std::cout << "post kernel" << std::endl;
+        // for(int i = 0; i < 10; i ++)
+        //     std::cout << H_sumR_sa[i] << std::endl;
+        // for(int i = 0; i < 10; i ++)
+        //     std::cout << H_S2_vec[i] << std::endl;
                     
     }
+    // TODO: in optimazation phase move this line after initilisation num_uq_S2 vectors.
+    cudaDeviceSynchronize();
+    //initialising vectors for counting nnzs or number of uniqe S2s for S1s
+    //Hopefully, this will go on parallelly with the last kernel
+    thrust::device_vector<float> D_num_uq_s2(ncells*num_actions,0);
+    thrust::device_vector<float> D_prSum_num_uq_s2(ncells*num_actions);
+    float* num_uq_s2_ptr = thrust::raw_pointer_cast(&D_num_uq_s2[0]);
+    float* prSum_num_uq_s2_ptr = thrust::raw_pointer_cast(&D_prSum_num_uq_s2[0]);
 
+ 
+    // Sort master_data
+    float* D_master_S2_arr_ip = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
+    thrust::stable_sort_by_key(D_master_S2_vector.begin(), D_master_S2_vector.end(), D_master_vals.begin());
+    thrust::stable_sort_by_key(D_master_vals.begin(), D_master_vals.end(), D_master_S2_vector.begin());
+
+
+    // launch kernel to count nnzs
+    int nblocks = ncells*num_actions;
+    count_kernel<<<nblocks,1>>>(D_master_S2_arr_ip, num_rzns, num_uq_s2_ptr);
     cudaDeviceSynchronize();
 
-    // Post processing
+ 
+    // calc nnz_xa: number of non zero elements(or unique S2s) across(multiplied by) num_actions actions
+    int nnz_xa = (int) thrust::reduce(D_num_uq_s2.begin(), D_num_uq_s2.end(), (float) 0, thrust::plus<float>());
+    // get prefix sum of D_num_uq_s2. This helps threads to access apt COO indices in reduce_kernel
+    thrust::exclusive_scan(D_num_uq_s2.begin(), D_num_uq_s2.end(), D_prSum_num_uq_s2.begin());
 
-    // assignment to output data
+    //initilise coo arrays (concated across actions)
+    thrust::device_vector<float> D_coo_s1(nnz_xa);
+    thrust::device_vector<float> D_coo_s2(nnz_xa);
+    thrust::device_vector<float> D_coo_count(nnz_xa);
+    float* D_coo_s1_arr = thrust::raw_pointer_cast(&D_coo_s1[0]);
+    float* D_coo_s2_arr = thrust::raw_pointer_cast(&D_coo_s2[0]);
+    float* D_coo_cnt_arr = thrust::raw_pointer_cast(&D_coo_count[0]);
 
+
+    // reduce operation to fill COO arrays
+    reduce_kernel<<<nblocks,1>>>(D_master_S2_arr_ip, t, ncells, num_rzns, nnz_xa, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, num_uq_s2_ptr, prSum_num_uq_s2_ptr);
+    cudaDeviceSynchronize();
+
+    //reduce D_num_uq_s2 in chunks of actions - to find nnz or len_coo_arr for each action
+    for (int n = 0; n < num_actions; n++)
+        H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2.begin() + n*ncells, D_num_uq_s2.begin() +  (n+1)*ncells, (float) 0, thrust::plus<float>());
+    thrust::inclusive_scan(H_coo_len_per_ac.begin(), H_coo_len_per_ac.end(), H_coo_len_per_ac.begin());
+
+    // //check
+    // std::cout << "H_coo_len_per_ac" << std::endl;
+    // for (int n = 0; n < num_actions; n++)
+    //   std::cout << H_coo_len_per_ac[n] << std::endl;
+
+
+    // Copy Device COO rusults to Host COO vectors across actions and append vectors across time
+    H_Aarr_of_cooS1[0].insert(H_Aarr_of_cooS1[0].end(), D_coo_s1.begin(), D_coo_s1.begin() + H_coo_len_per_ac[0]);
+    for (int n = 1; n < num_actions; n++){
+        H_Aarr_of_cooS1[n].insert(H_Aarr_of_cooS1[n].end(), D_coo_s1.begin() + H_coo_len_per_ac[n-1], D_coo_s1.begin() + H_coo_len_per_ac[n]);
+    }
+
+    H_Aarr_of_cooS2[0].insert(H_Aarr_of_cooS2[0].end(), D_coo_s2.begin(), D_coo_s2.begin() + H_coo_len_per_ac[0]);
+    for (int n = 1; n < num_actions; n++){
+        H_Aarr_of_cooS2[n].insert(H_Aarr_of_cooS2[n].end(), D_coo_s2.begin() + H_coo_len_per_ac[n-1], D_coo_s2.begin() + H_coo_len_per_ac[n]);
+    }
+
+    H_Aarr_of_cooProb[0].insert(H_Aarr_of_cooProb[0].end(), D_coo_count.begin(), D_coo_count.begin() + H_coo_len_per_ac[0]);
+    for (int n = 1; n < num_actions; n++){
+        H_Aarr_of_cooProb[n].insert(H_Aarr_of_cooProb[n].end(), D_coo_count.begin() + H_coo_len_per_ac[n-1], D_coo_count.begin() + H_coo_len_per_ac[n]);
+    }
+
+    for (int n = 0; n < num_actions; n++)
+        H_Aarr_of_Rs[n].insert(H_Aarr_of_Rs[n].end(), D_master_sumRsa_vector.begin() + n*ncells, D_master_sumRsa_vector.begin() + (n+1)*ncells);
+    
+
+    // std::cout << "H_Aarr_of_cooS1" << std::endl;
+    // for (int n = 0; n < num_actions; n++){
+    //     for (int i = 0; i < H_Aarr_of_cooS1[n].size(); i++)
+    //         std::cout << H_Aarr_of_cooS1[n][i] << " , " << H_Aarr_of_cooS2[n][i] << " , " << H_Aarr_of_cooProb[n][i] << std::endl;
+    //     std::cout << std::endl;
+    // }
+
+    // std::cout << "H_Aarr_of_Rs" << std::endl;
+    // for (int n = 0; n < num_actions; n++){
+    //     for (int i = 0; i < ncells; i++)
+    //         std::cout << H_Aarr_of_Rs[n][i] << std::endl;
+    //     std::cout << std::endl;
+    // }
+
+
+    // // array of num_actions decive_vvectors for sum_Rsa_vec
+    // // initialasation with 0 is important. because values are added to this
+    // thrust::host_vector<float> H_arr_sumR_sa[num_actions];
+    // for(int n = 0; n < num_actions; n++){
+    //     H_arr_sumR_sa[n] = thrust::host_vector<float>(nnz[i]);
 
 }
 
-
+// function declarations
 cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elements);
-
 void define_xs_or_ys(float* xs, float dx, float x0, int gsize);
-
 void populate_ac_angles(float* ac_angles, int num_actions);
+void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions, 
+    thrust::host_vector<int32_t> &H_master_cooS1, 
+    thrust::host_vector<int32_t> &H_master_cooS2, 
+    thrust::host_vector<float> &H_master_cooVal,
+    thrust::host_vector<float> &H_master_R,
+    thrust::host_vector<float>* H_Aarr_of_cooS1,
+    thrust::host_vector<float>* H_Aarr_of_cooS2,
+    thrust::host_vector<float>* H_Aarr_of_cooProb,
+    thrust::host_vector<float>* H_Aarr_of_Rs,
+    int32_t* DP_relv_params);
 
 
 int main(){
 
 // -------------------- input data starts here ---------------------------------
 
-    //  // DG3 data
-    //TODO: take parameters form different file
-    // float nt = 3;
-    // float is_stationary = 0;
-    // float gsize = 100;
-    // float num_actions = 8;
-    // float num_rzns = 5000;
-    // float bDimx = num_rzns;
-    // float F = 20.2;
-    // float r_outbound = -1;
-    // float r_terminal = 1;
-    // float i_term = 19;
-    // float j_term = 40;
-    // float nmodes = 5;
-    // float x0 = 0.005;
-    // float y0 = 0.005;
-    // float dx = 0.01; float dy = 0.01;
-    // float dt = 0.0004;
-    // if (num_rzns >= 1000)
-    //     bDimx = 1000;
+     // DG3 data
+    // TODO: take parameters form different file
+    std::string op_FnamePfx = "data/output/test_DG_nt60/"; //path for storing op npy data.
 
-    // //TODO: define output file savepath
-
-    // float z = -9999;
-    // // TODO: 1. read paths form file
-    // //       2. Make sure files are stored in np.float32 format
-    // std::string data_path = "data/nT_60/";
-    // std::string all_u_fname = data_path + "all_u_mat.npy";
-    // std::string all_v_fname = data_path + "all_v_mat.npy";
-    // std::string all_ui_fname = data_path + "all_ui_mat.npy";
-    // std::string all_vi_fname = data_path + "all_vi_mat.npy";
-    // std::string all_yi_fname = data_path + "all_Yi.npy";
-
-    // simple grid
-    float nt = 3;
+    float nt = 60;
     float is_stationary = 0;
-    float gsize = 5;
+    float gsize = 100;
     float num_actions = 8;
-    float num_rzns = 5;
+    float num_rzns = 5000;
     float bDimx = num_rzns;
-    float F = 1;
-    float r_outbound = -1;
-    float r_terminal = 1;
-    float i_term = 1;
-    float j_term = 3;
-    float nmodes = 1;
-    float x0 = 0.5;
-    float y0 = 0.5;
-    float dx = 1; float dy = 1;
-    float dt = 1;
+    float F = 20.2;
+    float r_outbound = -10;
+    float r_terminal = 10;
+    float i_term = 19;
+    float j_term = 40;
+    float nmodes = 5;
+    float x0 = 0.005;
+    float y0 = 0.005;
+    float dx = 0.01; float dy = 0.01;
+    float dt = 0.0004;
     if (num_rzns >= 1000)
         bDimx = 1000;
- 
+
+    //TODO: define output file savepath
+
     float z = -9999;
     // TODO: 1. read paths form file
     //       2. Make sure files are stored in np.float32 format
-    std::string data_path = "data/jet_5x5/";
+    std::string data_path = "data/nT_60/";
     std::string all_u_fname = data_path + "all_u_mat.npy";
     std::string all_v_fname = data_path + "all_v_mat.npy";
     std::string all_ui_fname = data_path + "all_ui_mat.npy";
     std::string all_vi_fname = data_path + "all_vi_mat.npy";
     std::string all_yi_fname = data_path + "all_Yi.npy";
+    
+    int mkdir_status;
+
+    std::string comm_mkdir = "mkdir ";
+    std::string str = comm_mkdir + op_FnamePfx;
+    const char * full_command = str.c_str();
+    mkdir_status = system(full_command);
+    std::cout << "mkdir_status = " << mkdir_status << std::endl;
+
+
+
+// ---------------------------------------------------------
+
+    // // simple grid
+    // float nt = 3;
+    // float is_stationary = 0;
+    // float gsize = 5;
+    // float num_actions = 8;
+    // float num_rzns = 5;
+    // float bDimx = num_rzns;
+    // float F = 1;
+    // float r_outbound = -1;
+    // float r_terminal = 1;
+    // float i_term = 1;
+    // float j_term = 3;
+    // float nmodes = 1;
+    // float x0 = 0.5;
+    // float y0 = 0.5;
+    // float dx = 1; float dy = 1;
+    // float dt = 1;
+    // if (num_rzns >= 1000)
+    //     bDimx = 1000;
+ 
+    // float z = -9999;
+    // // TODO: 1. read paths form file
+    // //       2. Make sure files are stored in np.float32 format
+    // std::string data_path = "data/jet_5x5/";
+    // std::string all_u_fname = data_path + "all_u_mat.npy";
+    // std::string all_v_fname = data_path + "all_v_mat.npy";
+    // std::string all_ui_fname = data_path + "all_ui_mat.npy";
+    // std::string all_vi_fname = data_path + "all_vi_mat.npy";
+    // std::string all_yi_fname = data_path + "all_Yi.npy";
 
 
 // -------------------- input data ends here ---------------------------------
@@ -585,32 +764,168 @@ int main(){
 
     thrust::device_vector<float> D_tdummy(2,0);
     // initialise empty device vectors. These contain time-invariant data
-    thrust::device_vector<float> D_ac_angles(num_actions);
     thrust::device_vector<float> D_params(32);
     thrust::device_vector<float> D_xs(gsize);
     thrust::device_vector<float> D_ys(gsize);
+
+    // initialise reuseable host vectors
+    thrust::host_vector<float> H_coo_len_per_ac(num_actions);
+    thrust::host_vector<float> H_Aarr_of_cooS1[(int)num_actions];
+    thrust::host_vector<float> H_Aarr_of_cooS2[(int)num_actions];
+    thrust::host_vector<float> H_Aarr_of_cooProb[(int)num_actions];
+    thrust::host_vector<float> H_Aarr_of_Rs[(int)num_actions];
+
+    for (int i =0; i < num_actions; i++){
+        H_Aarr_of_cooS1[i] = thrust::host_vector<float> (0);
+    }
+    for (int i =0; i < num_actions; i++){
+        H_Aarr_of_cooS2[i] = thrust::host_vector<float> (0);
+    }
+    for (int i =0; i < num_actions; i++){
+        H_Aarr_of_cooProb[i] = thrust::host_vector<float> (0);
+    }
+    for (int i =0; i < num_actions; i++){
+        H_Aarr_of_Rs[i] = thrust::host_vector<float> (0);
+    }
+
+
+    //initialise master_value_vector for sort_by_key
+    int ncells = gsize*gsize;
+    int arr_size = ncells * num_rzns;
+    thrust::host_vector<float> H_master_vals(arr_size*num_actions);
+    for (int i = 0; i < arr_size*num_actions; i++)
+        H_master_vals[i] = (int)(i/num_rzns);
+    thrust::device_vector<float> D_master_vals(arr_size*num_actions);
+    D_master_vals = H_master_vals;
+
+
     // copy data from host to device
-    D_ac_angles = H_ac_angles;
     D_params = H_params;
     D_xs = H_xs;
     D_ys = H_ys;
-
+    auto start = high_resolution_clock::now(); 
+    auto end = high_resolution_clock::now(); 
+    auto duration_t = duration_cast<microseconds>(end - start);
     for(int t = 0; t < nt; t++){
         std::cout << "*** Computing data for timestep, T = " << t << std::endl;
         D_tdummy[0] = t;
 
-        // TODO: Define output data
-        build_sparse_transition_model_at_T(t, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr 
-                                             ,D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                                             D_params, D_xs, D_ys, D_ac_angles);
-                                            //  output_data )
+        start = high_resolution_clock::now(); 
+            // this function also concats coos across time.
+            build_sparse_transition_model_at_T(t, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr 
+                                                ,D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
+                                                D_params, D_xs, D_ys, H_ac_angles, D_master_vals,
+                                                H_coo_len_per_ac,
+                                                H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
+                                                H_Aarr_of_Rs);
+                                                //  output_data )
+        end = high_resolution_clock::now(); 
+        std::cout << std::endl ;
+        duration_t = duration_cast<microseconds>(end - start);
+        std::cout << "duration@t = "<< duration_t.count()/1e6 << std::endl;
         std::cout << std::endl << std::endl;
-        // TODO: concatenate output data
-        // concatenate_results_across_time(output_data)
+
     }
+
+    // TODO: save data to file
+    thrust::host_vector<int32_t> H_master_PrSum_nnz_per_ac(num_actions);
+    int32_t DP_relv_params[2] = {(int32_t)ncells*nt, (int32_t)num_actions};
+    
+    int master_nnz = 0;
+    for(int i = 0; i < num_actions; i++){
+        master_nnz += H_Aarr_of_cooS1[i].size();
+        H_master_PrSum_nnz_per_ac[i] = master_nnz;
+    }
+        
+    std::cout << "master_nnz = " << master_nnz << std::endl;
+
+    std::cout << "H_Aarr_of_cooS1[i].size()" << std::endl;
+    for(int i = 0; i < num_actions; i++)
+        std::cout << H_Aarr_of_cooS1[i].size() << std::endl;
+
+    thrust::host_vector<int32_t> H_master_cooS1(master_nnz);
+    thrust::host_vector<int32_t> H_master_cooS2(master_nnz);
+    thrust::host_vector<float> H_master_cooVal(master_nnz);
+    thrust::host_vector<float> H_master_R(ncells*nt*num_actions);
+
+    save_master_Coos_to_file(op_FnamePfx, num_actions,
+                                H_master_cooS1, 
+                                H_master_cooS2, 
+                                H_master_cooVal,
+                                H_master_R,
+                                H_Aarr_of_cooS1,
+                                H_Aarr_of_cooS2,
+                                H_Aarr_of_cooProb,
+                                H_Aarr_of_Rs,
+                                DP_relv_params);
+
 
     return 0;
 }
+
+void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
+    thrust::host_vector<int32_t> &H_master_cooS1, 
+    thrust::host_vector<int32_t> &H_master_cooS2, 
+    thrust::host_vector<float> &H_master_cooVal,
+    thrust::host_vector<float> &H_master_R,
+    thrust::host_vector<float>* H_Aarr_of_cooS1,
+    thrust::host_vector<float>* H_Aarr_of_cooS2,
+    thrust::host_vector<float>* H_Aarr_of_cooProb,
+    thrust::host_vector<float>* H_Aarr_of_Rs,
+    int32_t* DP_relv_params
+    ){
+    //  Convertes floats to int32 for COO row and col idxs
+    //  copies from each action vector to a master vector
+    //  master_coo vectors is concatation first across time, then across action
+    //  ALSO, MODIFIES S1(t,i,j) to S1(t,i,j,a)
+
+    int master_nnz = H_master_cooS1.size();
+    int m_idx = 0;
+    int n_states = DP_relv_params[0];
+
+    for(int i = 0; i < num_actions; i++){
+        for(int j = 0; j< H_Aarr_of_cooS1[i].size(); j++){
+            // TODO: modify to include actions
+            H_master_cooS1[m_idx] = (int32_t)H_Aarr_of_cooS1[i][j] + i*n_states;
+            m_idx++;
+        }
+    }
+
+    m_idx = 0;
+    for(int i = 0; i < num_actions; i++){
+        for(int j = 0; j< H_Aarr_of_cooS2[i].size(); j++){
+            H_master_cooS2[m_idx] = (int32_t)H_Aarr_of_cooS2[i][j];
+            m_idx++;
+        }
+    }
+
+    m_idx = 0;
+    for(int i = 0; i < num_actions; i++){
+        for(int j = 0; j< H_Aarr_of_cooProb[i].size(); j++){
+            H_master_cooVal[m_idx] = H_Aarr_of_cooProb[i][j];
+            m_idx++;
+        }
+    }
+
+    m_idx = 0;
+    for(int i = 0; i < num_actions; i++){
+        for(int j = 0; j< H_Aarr_of_Rs[i].size(); j++){
+            H_master_R[m_idx] = H_Aarr_of_Rs[i][j];
+            m_idx++;
+        }
+    }
+
+    int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
+    std::cout << "check num_DP_params = " << num_DP_params << std::endl;
+
+    cnpy::npy_save(op_FnamePfx + "master_cooS1.npy", &H_master_cooS1[0], {master_nnz,1},"w");
+    cnpy::npy_save(op_FnamePfx + "master_cooS2.npy", &H_master_cooS2[0], {master_nnz,1},"w");
+    cnpy::npy_save(op_FnamePfx + "master_cooVal.npy", &H_master_cooVal[0], {master_nnz,1},"w");
+    cnpy::npy_save(op_FnamePfx + "master_R.npy", &H_master_R[0], {H_master_R.size(),1},"w");
+    cnpy::npy_save(op_FnamePfx + "DP_relv_params.npy", &DP_relv_params[0], {num_DP_params,1},"w");
+
+}
+
 
 
 cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elements){
@@ -635,7 +950,6 @@ cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elem
     std::cout << std::endl << "num_elements: " << num_elements << std::endl;
 
     float* vel_data = arr.data<float>();
-
     // print check first 10 elements
     std::cout << std::endl << "First 10 elements of loaded array are: " << std::endl;
     for (int i = 0; i < 10; i++)
