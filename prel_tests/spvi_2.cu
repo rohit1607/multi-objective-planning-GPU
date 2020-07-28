@@ -678,13 +678,11 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
     cudaErr = cudaMemcpy(p_out_value_func, s_dev_CV, (size_t)(s_Ns*sizeof(float)), cudaMemcpyDeviceToHost);
     assert(cudaErr == cudaSuccess);
 
-
     // Free any CPU RAM that was malloc'd in this function
     if (s_host_cooRowIndex != NULL) {free(s_host_cooRowIndex);}
     if (s_host_cooColIndex != NULL) {free(s_host_cooColIndex);}
     if (s_host_cooVal != NULL) {free(s_host_cooVal);}
     if (s_h_reduce_out_vec != NULL) {free(s_h_reduce_out_vec);}
-
 
     // Free all GPU memory allocations
     // assert(cuda_deinit() == EXIT_SUCCESS);
@@ -701,11 +699,17 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
 }
 
 int main(){
-
-    std::string data_path = "data/output/test_DG_nt60/";
+    std::string prob_name = "all_jet_g100x100x100_r5k/";
+    std::string model_data_path = "data/model_output/" + prob_name;
+    std::string results_path = "results/" + prob_name;
     s_stopping_thresh = 1e-1;
 
-
+    int mkdir_status;
+    std::string comm_mkdir = "mkdir ";
+    std::string str = comm_mkdir + results_path;
+    const char * full_command = str.c_str();
+    mkdir_status = system(full_command);
+    std::cout << "mkdir_status = " << mkdir_status << std::endl;
 
     int max_solver_time_s = 1;
     thrust::host_vector<uint32_t> p_out_policy_vec(0);
@@ -713,10 +717,13 @@ int main(){
     // Load in MDP from external format
     // get_mdp_model_test();
 
-    get_mdp_model(data_path);
+    get_mdp_model(model_data_path);
     printf("mdp model laoded\n");
 
     solver_spvi_solve(p_out_policy_vec, p_out_value_func_vec,  max_solver_time_s);
+
+    cnpy::npy_save(results_path + "policy.npy", &p_out_policy_vec[0], {p_out_policy_vec.size(),1},"w");
+    cnpy::npy_save(results_path + "value_function.npy", &p_out_value_func_vec[0], {p_out_value_func_vec.size(),1},"w");
 
 
     return 0;
