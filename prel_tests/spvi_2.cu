@@ -364,11 +364,11 @@ cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elem
 
     T* vel_data = arr.data<T>();
     // print check first 10 elements
-    std::cout << std::endl << "First 10 elements of loaded array are: " << std::endl;
+    std::cout << "First 10 elements of loaded array are: " << std::endl;
     for (int i = 0; i < 10; i++)
          std::cout << vel_data[i] << "  " ;
     
-    std::cout << std::endl;
+    std::cout << std::endl<< std::endl;
 
     return arr;
 
