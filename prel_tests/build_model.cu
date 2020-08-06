@@ -873,7 +873,8 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     thrust::host_vector<long long int>* H_Aarr_of_cooS2,
     thrust::host_vector<float>* H_Aarr_of_cooProb,
     thrust::host_vector<float>* H_Aarr_of_Rs,
-    long long int* DP_relv_params);
+    long long int* DP_relv_params,
+    unsigned long int num_DP_params);
 
 
 // global variables
@@ -973,18 +974,18 @@ int main(){
 
  // // 10x10x10 grid. jet across grid varying between 1-2 units/sec.
 
-    std::string prob_name = "all_jet_g100x100x5_r10_a8";
+    std::string prob_name = "all_jet_g100x100x100_r10_a8_c2";
     std::string op_FnamePfx = "data/model_output/" + prob_name + "/"; //path for storing op npy data.
 
-    int32_t nt = 5;
+    int32_t nt = 100;
     int32_t is_stationary = 0;
     int32_t gsize = 100;
     int32_t num_actions = 8;
     int32_t nrzns = 10;
     int32_t bDimx = nrzns;
     float F = 1;
-    float r_outbound = -1;
-    float r_terminal = 1;
+    float r_outbound = -1000;
+    float r_terminal = 100;
     int32_t i_term = 50;
     int32_t j_term = 96;
     float nmodes = 1;
@@ -1201,14 +1202,18 @@ int main(){
 
     // find nnz per action
     thrust::host_vector<long long int> H_master_PrSum_nnz_per_ac(num_actions);
-    long long int DP_relv_params[2] = {ncells*nt, num_actions};
+    long long int DP_relv_params[2] = {ncells*nt, num_actions*1LL};
     
     long long int master_nnz = 0;
     for(int i = 0; i < num_actions; i++){
         master_nnz += H_Aarr_of_cooS1[i].size();
         H_master_PrSum_nnz_per_ac[i] = master_nnz;
     }
-        
+       
+    print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
+    unsigned long int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
+    std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;
+    std::cout << "chek denom = " << sizeof(DP_relv_params[0]) << std::endl;
 
     //checks
     std::cout << "master_nnz = " << master_nnz << std::endl;
@@ -1232,7 +1237,8 @@ int main(){
                                 H_Aarr_of_cooS2,
                                 H_Aarr_of_cooProb,
                                 H_Aarr_of_Rs,
-                                DP_relv_params);
+                                DP_relv_params,
+                                num_DP_params);
 
 
     return 0;
@@ -1249,7 +1255,8 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     thrust::host_vector<long long int>* H_Aarr_of_cooS2,
     thrust::host_vector<float>* H_Aarr_of_cooProb,
     thrust::host_vector<float>* H_Aarr_of_Rs,
-    long long int* DP_relv_params
+    long long int* DP_relv_params,
+    unsigned long int num_DP_params
     ){
     //  Convertes floats to int32 for COO row and col idxs
     //  copies from each action vector to a master vector
@@ -1297,7 +1304,7 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
         }
     }
 
-    unsigned long int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
+    
     std::cout << "check num_DP_params = " << num_DP_params << std::endl;
 
     cnpy::npy_save(op_FnamePfx + "master_cooS1.npy", &H_master_cooS1[0], {master_nnz,1},"w");
