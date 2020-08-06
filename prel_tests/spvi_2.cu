@@ -49,7 +49,7 @@ using namespace std::chrono;
 
 
 
-static int    s_nnz = 0;
+static size_t  s_nnz = 0;
 static size_t s_Ns = 0;
 static size_t s_Na = 0;
 static size_t s_NsNa = 0;     // Shorthand for "Ns times Na"
@@ -491,12 +491,12 @@ static void get_mdp_model(std::string model_fpath){
 
 static void get_mdp_model_test(){
     s_discount_factor = 1;
-    int s_ncells = 4;
-    int s_nt =3;
+    int s_ncells = 200000;
+    int s_nt =100;
     int s_nu =2;
-    int s_num_actions = 2;
-    int dummy_nnz =  s_ncells * s_nu * (s_nt-1) * s_num_actions;
-    int nnz_per_ac = s_ncells * s_nu * (s_nt-1);
+    int s_num_actions = 8;
+    uint dummy_nnz =  s_ncells * s_nu * (s_nt-1) * s_num_actions;
+    uint nnz_per_ac = s_ncells * s_nu * (s_nt-1);
     float threshold = 1e-2;
 
     s_Ns = s_ncells * s_nt;
@@ -508,6 +508,7 @@ static void get_mdp_model_test(){
     // float eps = 0.5f;
     s_stopping_thresh = threshold;
     s_nnz = dummy_nnz; // cam get from master_coo host_vector.size()
+    std::cout << "nnz = " << s_nnz << "\n";
 
     //TODO: load np array to host_vector
     thrust::host_vector<int32_t> hA_cooRows_vec( s_nnz);
@@ -530,7 +531,7 @@ static void get_mdp_model_test(){
         col_st = (((i%nnz_per_ac)/(s_ncells*s_nu)) + 1)*s_ncells;
         hA_columns_vec[i] = col_st + (i%s_nu);
 
-        hA_values_vec[i] = 0.5f;
+        hA_values_vec[i] = 1.0/s_nu;
     }
 
     for(int i = 0; i < s_NsNa; i++){
@@ -538,20 +539,21 @@ static void get_mdp_model_test(){
     }
     std::cout << std::endl;
 
-    //  check coo intilisations
-    for(int i = 0; i < s_nnz; i++)
-        std::cout << hA_cooRows_vec[i] << ", " ;
-    std::cout << std::endl;
-    for(int i = 0; i < s_nnz; i++)
-        std::cout << hA_columns_vec[i] << ", " ;   
-    std::cout << std::endl; 
-    for(int i = 0; i < s_nnz; i++)
-        std::cout << hA_values_vec[i] << ", " ;  
-    std::cout << std::endl;  
-    for(int i = 0; i < s_NsNa; i++)
-        std::cout << host_R[i] << ", " ;  
-    std::cout << std::endl;  
+    // //  check coo intilisations
+    // for(int i = 0; i < s_nnz; i++)
+    //     std::cout << hA_cooRows_vec[i] << ", " ;
+    // std::cout << std::endl;
+    // for(int i = 0; i < s_nnz; i++)
+    //     std::cout << hA_columns_vec[i] << ", " ;   
+    // std::cout << std::endl; 
+    // for(int i = 0; i < s_nnz; i++)
+    //     std::cout << hA_values_vec[i] << ", " ;  
+    // std::cout << std::endl;  
+    // for(int i = 0; i < s_NsNa; i++)
+    //     std::cout << host_R[i] << ", " ;  
+    // std::cout << std::endl;  
 
+    auto start = high_resolution_clock::now(); 
 
     cudaError_t cudaStat;
     // Previous value function (init to zero)
@@ -613,11 +615,20 @@ static void get_mdp_model_test(){
                         CUSPARSE_INDEX_32I,
                         CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
 
-    std::cout << "testPV[i]- init" << std::endl;
-    thrust::device_vector<float> testPV(s_dev_PV, s_dev_PV + s_Ns);
-    for(int i = 0; i < testPV.size(); i++)
-        std::cout << testPV[i] << std::endl;
-    
+    auto end = high_resolution_clock::now(); 
+    auto duration_t = duration_cast<microseconds>(end - start);
+    std::cout << "alloacte and copy duration = "<< duration_t.count()/1e6 << std::endl;
+    // std::cout << "testPV[i]- init" << std::endl;
+    // thrust::device_vector<float> testPV(s_dev_PV, s_dev_PV + s_Ns);
+    // for(int i = 0; i < testPV.size(); i++)
+    //     std::cout << testPV[i] << std::endl;
+    int32_t DP_relv_params[2] = {s_Ns, s_Na};
+    thrust::host_vector<int32_t> DP_relv_params_vec(DP_relv_params, DP_relv_params+2);
+    cnpy::npy_save("master_cooS1.npy", &hA_cooRows_vec[0], {hA_cooRows_vec.size(),1},"w");
+    cnpy::npy_save("master_cooS2.npy", &hA_columns_vec[0], {hA_columns_vec.size(),1},"w");
+    cnpy::npy_save("master_cooVal.npy", &hA_values_vec[0], {hA_values_vec.size(),1},"w");
+    cnpy::npy_save("master_R.npy", &host_R_vec[0], {host_R_vec.size(),1},"w");
+    cnpy::npy_save("DP_relv_params.npy", &DP_relv_params_vec[0], {DP_relv_params_vec.size(),1},"w");
 
 }
 
@@ -699,7 +710,7 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
 }
 
 int main(){
-    std::string prob_name = "all_jet_g100x100x100_r5k/";
+    std::string prob_name = "large_prob_size/";
     std::string model_data_path = "data/model_output/" + prob_name;
     std::string results_path = "results/" + prob_name;
     s_stopping_thresh = 1e-1;
@@ -716,9 +727,12 @@ int main(){
     thrust::host_vector<float> p_out_value_func_vec(0);
     // Load in MDP from external format
     // get_mdp_model_test();
-
-    get_mdp_model(model_data_path);
-    printf("mdp model laoded\n");
+    auto start = high_resolution_clock::now(); 
+        get_mdp_model(model_data_path);
+        printf("mdp model laoded\n");
+    auto end = high_resolution_clock::now(); 
+    auto duration_t = duration_cast<microseconds>(end - start);
+    std::cout << "model_load_time = "<< duration_t.count()/1e6 << std::endl;
 
     solver_spvi_solve(p_out_policy_vec, p_out_value_func_vec,  max_solver_time_s);
 
@@ -733,13 +747,34 @@ int main(){
 
 
 
+// int main(){
+//     auto start = high_resolution_clock::now(); 
+//     int max_solver_time_s = 1;
+//     thrust::host_vector<uint32_t> p_out_policy_vec(0);
+//     thrust::host_vector<float> p_out_value_func_vec(0);
+//     auto end = high_resolution_clock::now(); 
+//     auto duration_t = duration_cast<microseconds>(end - start);
+//     std::cout << "host init time = "<< duration_t.count()/1e6 << std::endl;
 
+//     // Load in MDP from external format
+//     // get_mdp_model_test();
+
+//     get_mdp_model_test();
+//     printf("mdp model laoded\n");
+
+//     start = high_resolution_clock::now(); 
+//     solver_spvi_solve(p_out_policy_vec, p_out_value_func_vec,  max_solver_time_s);
+//     end = high_resolution_clock::now(); 
+//     duration_t = duration_cast<microseconds>(end - start);
+//     std::cout << "solve time = "<< duration_t.count()/1e6 << std::endl;
+
+// }
 
 
 
 
 int test_main(){
-    //     // ----------------- Inidividual function Tests-----------------
+        // ----------------- Inidividual function Tests-----------------
     //     get_mdp_model_test();
 
     //     std::cout << "s_nnz = " << s_nnz << std::endl; 
@@ -771,6 +806,6 @@ int test_main(){
     //     std::cout << "sup_norm = " << sup_norm << std::endl;
 
 
-    return 0;
+    // return 0;
 }
 
