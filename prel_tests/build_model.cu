@@ -95,9 +95,12 @@ __device__ bool is_edge_state(int32_t i, int32_t j){
 
 
 __device__ bool is_terminal(int32_t i, int32_t j, float* params){
-    int32_t i_term = params[8];         // terminal state indices
+    // terminal state indices (of UL corner of terminal subgrid if term_subgrid_size>1)
+    int32_t i_term = params[8];         
     int32_t j_term = params[9];
-    if(i == i_term && j == j_term)
+    int tsgsize = params[12]; //term_subgrid_size
+
+    if( (i >= i_term && i < i_term + tsgsize)  && (j >= j_term && j < j_term + tsgsize) )
         return true;
     else return false;
 }
@@ -873,6 +876,7 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     thrust::host_vector<long long int>* H_Aarr_of_cooS2,
     thrust::host_vector<float>* H_Aarr_of_cooProb,
     thrust::host_vector<float>* H_Aarr_of_Rs,
+    thrust::host_vector<float> &prob_params,
     long long int* DP_relv_params,
     unsigned long int num_DP_params);
 
@@ -974,25 +978,32 @@ int main(){
 
  // // 10x10x10 grid. jet across grid varying between 1-2 units/sec.
 
-    std::string prob_name = "all_jet_g100x100x100_r10_a8_c2";
+    std::string prob_name = "all_jet_refg200x200x200_r10";
     std::string op_FnamePfx = "data/model_output/" + prob_name + "/"; //path for storing op npy data.
 
-    int32_t nt = 100;
-    int32_t is_stationary = 0;
-    int32_t gsize = 100;
-    int32_t num_actions = 8;
+    int32_t nt = 200;
+    float dt = 1;
+    int32_t gsize = 200;
+    float dx = 0.5; float dy = 0.5;
+    float x0 = dx/2;
+    float y0 = dy/2;
+    int32_t num_actions = 16;
     int32_t nrzns = 10;
     int32_t bDimx = nrzns;
     float F = 1;
-    float r_outbound = -1000;
-    float r_terminal = 100;
-    int32_t i_term = 50;
-    int32_t j_term = 96;
+    float r_outbound = -100;
+    float r_terminal = 10;
+    // i_term and j_term are (i,j) coords for the TOP LEFT CORNER
+    // of the square subgrid that constitutes the terminal states
+    // int32_t i_term = 4;
+    // int32_t j_term = 7;
+    int32_t i_term = 100; //50
+    int32_t j_term = 180; //90
+    int term_subgrid_size = 2; //number of cells al
+    
     float nmodes = 1;
-    float x0 = 0.5;
-    float y0 = 0.5;
-    float dx = 1; float dy = 1;
-    float dt = 1;
+
+    int32_t is_stationary = 0;
     if (nrzns >= 1000)
         bDimx = 1000;
  
@@ -1056,7 +1067,8 @@ int main(){
     H_params[9] = j_term;
     H_params[10] = nt;
     H_params[11] = is_stationary;
-    for( int i =12; i<32; i++)
+    H_params[12] = term_subgrid_size;
+    for( int i =13; i<32; i++)
         H_params[i] = z;
 
     // Define grid ticks in host
@@ -1237,6 +1249,7 @@ int main(){
                                 H_Aarr_of_cooS2,
                                 H_Aarr_of_cooProb,
                                 H_Aarr_of_Rs,
+                                H_params,
                                 DP_relv_params,
                                 num_DP_params);
 
@@ -1255,6 +1268,7 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     thrust::host_vector<long long int>* H_Aarr_of_cooS2,
     thrust::host_vector<float>* H_Aarr_of_cooProb,
     thrust::host_vector<float>* H_Aarr_of_Rs,
+    thrust::host_vector<float> &prob_params,
     long long int* DP_relv_params,
     unsigned long int num_DP_params
     ){
@@ -1264,6 +1278,7 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     //  ALSO, MODIFIES S1(t,i,j) to S1(t,i,j,a)
 
     unsigned long long int master_nnz = H_master_cooS1.size();
+    unsigned long long int prob_params_size = prob_params.size();
     int m_idx = 0;
     int n_states = DP_relv_params[0];
 
@@ -1312,6 +1327,7 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     cnpy::npy_save(op_FnamePfx + "master_cooVal.npy", &H_master_cooVal[0], {master_nnz,1},"w");
     cnpy::npy_save(op_FnamePfx + "master_R.npy", &H_master_R[0], {H_master_R.size(),1},"w");
     cnpy::npy_save(op_FnamePfx + "DP_relv_params.npy", &DP_relv_params[0], {num_DP_params,1},"w");
+    cnpy::npy_save(op_FnamePfx + "prob_params.npy", &prob_params[0], {prob_params_size,1},"w");
 
 }
 

@@ -48,7 +48,6 @@ using namespace std::chrono;
 // #include "solver_spvi.h"
 
 
-
 static size_t  s_nnz = 0;
 static size_t s_Ns = 0;
 static size_t s_Na = 0;
@@ -391,7 +390,7 @@ static void get_mdp_model(std::string model_fpath){
     int32_t* master_cooS2_arr = master_cooS2_cnpy.data<int32_t>();
     float* master_cooVal_arr = master_cooVal_cnpy.data<float>();
     float* master_R_arr = master_R_cnpy.data<float>();
-    int32_t* DP_relv_params_arr = DP_relv_params_cnpy.data<int32_t>();
+    long long int* DP_relv_params_arr = DP_relv_params_cnpy.data<long long int>();
 
 
     // write information to global variables.
@@ -710,7 +709,7 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
 }
 
 int main(){
-    std::string prob_name = "large_prob_size/";
+    std::string prob_name = "all_jet_refg200x200x200_r10/";
     std::string model_data_path = "data/model_output/" + prob_name;
     std::string results_path = "results/" + prob_name;
     s_stopping_thresh = 1e-1;
