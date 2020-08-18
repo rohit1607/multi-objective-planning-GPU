@@ -1,3 +1,5 @@
+run: build_model_test
+	./bin/build_model_test
 
 build_model_test: build_model_test.o get_funcs.o
 	nvcc --gpu-architecture=sm_50 build_model_split_test.o get_funcs.o -L/usr/local/ -lcnpy -lz --std=c++11 --output-file bin/build_model_test

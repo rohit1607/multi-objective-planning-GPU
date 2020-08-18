@@ -979,16 +979,16 @@ int main(){
 
  // // 10x10x10 grid. jet across grid varying between 1-2 units/sec.
 
-    std::string prob_name = "all_jet_refg200x200x200_r10";
+    std::string prob_name = "for_split_verification_postSplit";
     std::string op_FnamePfx = "data/model_output/" + prob_name + "/"; //path for storing op npy data.
 
-    int32_t nt = 200;
+    int32_t nt = 10;
     float dt = 1;
-    int32_t gsize = 200;
-    float dx = 0.5; float dy = 0.5;
+    int32_t gsize = 100;
+    float dx = 1; float dy = 1;
     float x0 = dx/2;
     float y0 = dy/2;
-    int32_t num_actions = 16;
+    int32_t num_actions = 8;
     int32_t nrzns = 10;
     int32_t bDimx = nrzns;
     float F = 1;
@@ -998,10 +998,11 @@ int main(){
     // of the square subgrid that constitutes the terminal states
     // int32_t i_term = 4;
     // int32_t j_term = 7;
-    int32_t i_term = 100; //50
-    int32_t j_term = 180; //90
-    int term_subgrid_size = 2; //number of cells al
-    
+    int32_t i_term = 50;
+    int32_t j_term = 90;
+    // int32_t i_term = 100; //50
+    // int32_t j_term = 180; //90
+    int term_subgrid_size = 1; //number of cells al
     float nmodes = 1;
 
     int32_t is_stationary = 0;
