@@ -58,13 +58,13 @@ __device__ void move(float ac_angle, float vx, float vy, int32_t T, float* xs, f
     //checks TODO: remove checks once verified
     if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
     {
-        params[12] = x;
-        params[13] = y;
-        params[14] = vnetx;
-        params[15] = vnety;
-        params[16] = xnew;
-        params[17] = ynew;
-        params[18] = ac_angle;
+        params[14] = x;
+        params[15] = y;
+        params[16] = vnetx;
+        params[17] = vnety;
+        params[18] = xnew;
+        params[19] = ynew;
+        params[20] = ac_angle;
     }
     if (xnew > xs[n])
         {

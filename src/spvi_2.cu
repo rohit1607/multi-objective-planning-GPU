@@ -36,6 +36,7 @@ ENHANCEMENTS, OR MODIFICATIONS.
 #include <thrust/device_vector.h>
 #include <chrono>
 #include "cnpy.h"
+#include "utils.h"
 
 
 using namespace std::chrono;
@@ -711,17 +712,18 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
 int main(){
     std::string prob_type =         "time";
     std::string prob_name =         "for_split_verification_postSplit/";
-    std::string model_data_path =   std::string("data_modelOutput/") + prob_type + "/" + prob_name;
-    std::string results_path =      std::string("data_solverOutput/") + prob_type + "/" + prob_name;
+    std::string model_data_path =   std::string("data_modelOutput/") + prob_type + "/" + prob_name + "/";
+    std::string results_path =      std::string("data_solverOutput/") + prob_type + "/" + prob_name + "/";
     s_stopping_thresh = 1e-1;
 
     //TODO: make common function and put in utils.h
-    int mkdir_status;
-    std::string comm_mkdir = "mkdir ";
-    std::string str = comm_mkdir + results_path;
-    const char * full_command = str.c_str();
-    mkdir_status = system(full_command);
-    std::cout << "mkdir_status = " << mkdir_status << std::endl;
+    make_dir(results_path);
+    // int mkdir_status;
+    // std::string comm_mkdir = "mkdir ";
+    // std::string str = comm_mkdir + results_path;
+    // const char * full_command = str.c_str();
+    // mkdir_status = system(full_command);
+    // std::cout << "mkdir_status = " << mkdir_status << std::endl;
 
     int max_solver_time_s = 1;
     thrust::host_vector<uint32_t> p_out_policy_vec(0);

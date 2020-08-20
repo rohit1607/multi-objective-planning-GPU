@@ -14,6 +14,7 @@ using namespace std::chrono;
 #include "get_funcs.h"
 #include "extract_field.h"
 #include "move_and_rewards.h"
+#include "utils.h"
 
 long long int GPUmem = 8*1000*1000*1000LL; // using 1000 instead of 1024 
 int nchunks = 1;
@@ -43,6 +44,7 @@ __device__ void extract_velocity() moved to extract_field.h/cu
 */
 
 
+
 //test: changer from float* to float ac_angle
 __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int eff_chunk_size, long long int ncells, 
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
@@ -50,8 +52,7 @@ __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int 
                                     // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
 {
     int32_t gsize = params[0];          // size of grid along 1 direction. ASSUMING square grid.
-    int32_t nrzns = params[2];
-           
+    int32_t nrzns = params[2];         
     int32_t is_stationary = params[11];
     int32_t T = (int32_t)T_arr[0];      // current timestep
     int32_t idx = get_thread_idx();
@@ -135,6 +136,7 @@ __global__ void compute_mean(float* D_master_sumRsa_arr, int size, int nrzns) {
 }
 
 
+
 __global__ void count_kernel(long long int* D_master_S2_arr_ip, int nrzns, long long int* num_uq_s2_ptr) {
 
     int tid = blockIdx.x;
@@ -213,6 +215,8 @@ __global__ void reduce_kernel(long long int* D_master_S2_arr_ip, int t, int chun
    }
    return;
 }
+
+
 template<typename dType>
 void print_array(dType* array, int num_elems,std::string array_name, std::string end){
     std::cout << array_name << std::endl;
@@ -221,32 +225,11 @@ void print_array(dType* array, int num_elems,std::string array_name, std::string
     std::cout << std::endl;
 }
 
-// template<typename dType>
-void print_device_vector( thrust::device_vector<long long int> &array, int start_id, int end_id, std::string array_name, std::string end, int method){
-    std::cout << array_name << "  from id " << start_id << "  to  " << end_id << std::endl;
-    if (method == 1){
-        float temp = -10000000;
-        for(int i = start_id; i < end_id; i++){
-            if (array[i] != temp){
-                std::cout << i << "\n";
-                std::cout << array[i] << " " << end;
-                std::cout << "\n";
-                temp = array[i];
-            }
-        }
-    }
 
-    else if (method == 0){
-        for(int i = start_id; i < end_id; i++)
-            std::cout << array[i] << " " << end;
-    }
-
-    else
-        std::cout << "Invalid input for argument: method";
-
-
-    std::cout << std::endl;
-}
+/*
+--- print_device_vector() moved to utils.h/cu ---
+IMP: datatype has to be explicityle changed in that file
+*/
 
 
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
@@ -583,41 +566,24 @@ void get_cell_chunk_partition(int gsize, int ncells, int nrzns, int num_actions,
 return;
 }
        
+int get_reward_type(std::string prob_type){
+    // returns 
+    // 0 for time
+    // 1 for energy1
+    // 2 for energy2
+    // 3 for energy3
 
-// function declarations
-cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elements);
-void define_xs_or_ys(float* xs, float dx, float x0, int gsize);
-void populate_ac_angles(float* ac_angles, int num_actions);
-void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions, 
-    thrust::host_vector<long long int> &H_master_cooS1, 
-    thrust::host_vector<long long int> &H_master_cooS2, 
-    thrust::host_vector<float> &H_master_cooVal,
-    thrust::host_vector<float> &H_master_R,
-    thrust::host_vector<long long int>* H_Aarr_of_cooS1,
-    thrust::host_vector<long long int>* H_Aarr_of_cooS2,
-    thrust::host_vector<float>* H_Aarr_of_cooProb,
-    thrust::host_vector<float>* H_Aarr_of_Rs,
-    thrust::host_vector<float> &prob_params,
-    long long int* DP_relv_params,
-    unsigned long int num_DP_params);
-
-
-// global variables
-std::string str_x = "x";
-std::string str_g = "g";
-std::string str_r = "r";
-std::string str_a = "a";
-std::string str_us = "_";
-   // std::string str_probDim = str_g + std::to_string(gsize) + 
-    //                         str_x + std::to_string(gsize) + str_x +
-    //                         str_x + std::to_string(nt) + str_us; //"gsizexgsizexnt_"
-    // std::string str_probRzns = str_r + std::to_string(nrzns) + str_us;
-    // std::string str_probAc = str_a + std::to_string(num_actions);
-
-    // std::string str_prob_type = "all_jet_";
-    // std::string str_probVersion = str_us + str_v
-
-
+    if (prob_type == "time")
+        return 0;
+    else if (prob_type == "energy1")
+        return 1;
+    else if (prob_type == "energy2")
+        return 2;
+    else if (prob_type == "energy3")
+        return 3;
+    else    
+        return -1;
+}
 
 int main(){
 
@@ -658,44 +624,7 @@ int main(){
     // std::string all_vi_fname = data_path + "all_vi_mat.npy";
     // std::string all_yi_fname = data_path + "all_Yi.npy";
     
-   
-
-// ---------------------------------------------------------
-
-    // // simple grid
-    // std::string op_FnamePfx = "data/output/test_DG_nt60/"; //path for storing op npy data.
-
-    // float nt = 3;
-    // float is_stationary = 0;
-    // float gsize = 5;
-    // float num_actions = 8;
-    // float nrzns = 5;
-    // float bDimx = nrzns;
-    // float F = 1;
-    // float r_outbound = -1;
-    // float r_terminal = 1;
-    // float i_term = 1;
-    // float j_term = 3;
-    // float nmodes = 1;
-    // float x0 = 0.5;
-    // float y0 = 0.5;
-    // float dx = 1; float dy = 1;
-    // float dt = 1;
-    // if (nrzns >= 1000)
-    //     bDimx = 1000;
- 
-    // float z = -9999;
-    // // TODO: 1. read paths form file
-    // //       2. Make sure files are stored in np.float32 format
-    // std::string data_path = "data/jet_5x5/";
-    // std::string all_u_fname = data_path + "all_u_mat.npy";
-    // std::string all_v_fname = data_path + "all_v_mat.npy";
-    // std::string all_ui_fname = data_path + "all_ui_mat.npy";
-    // std::string all_vi_fname = data_path + "all_vi_mat.npy";
-    // std::string all_yi_fname = data_path + "all_Yi.npy";
-
-// ---------------------------------------------------------
-
+// --------------------------------------------------------------------------------
 
  // // 10x10x10 grid. jet across grid varying between 1-2 units/sec.
     std::string prob_type = "time"; //time, energy1, energy2, energy3
@@ -730,6 +659,10 @@ int main(){
         bDimx = 1000;
  
     float z = -9999;
+    int reward_type = get_reward_type(prob_type);
+    std::cout << "--- check reward type: " << reward_type << "\n";
+
+
     // TODO: 1. read paths form file
     //       2. Make sure files are stored in np.float32 format
     std::string data_path = "data_input/" + prob_name + "/";
@@ -742,12 +675,7 @@ int main(){
 // -------------------- input data ends here ---------------------------------
 
     // make directory for storing output data from this file
-    int mkdir_status;
-    std::string comm_mkdir = "mkdir ";
-    std::string str = comm_mkdir + op_FnamePfx;
-    const char * full_command = str.c_str();
-    mkdir_status = system(full_command);
-    std::cout << "mkdir_status = " << mkdir_status << std::endl;
+    make_dir(op_FnamePfx);
 
     int all_u_n_elms;
     int all_v_n_elms;
@@ -790,7 +718,8 @@ int main(){
     H_params[10] = nt;
     H_params[11] = is_stationary;
     H_params[12] = term_subgrid_size;
-    for( int i =13; i<32; i++)
+    H_params[13] = reward_type;
+    for( int i =14; i<32; i++)
         H_params[i] = z;
 
     // Define grid ticks in host
@@ -980,126 +909,3 @@ int main(){
 }
 
 //------------ main ends here ------------------------------------------
-
-void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
-    thrust::host_vector<long long int> &H_master_cooS1, 
-    thrust::host_vector<long long int> &H_master_cooS2, 
-    thrust::host_vector<float> &H_master_cooVal,
-    thrust::host_vector<float> &H_master_R,
-    thrust::host_vector<long long int>* H_Aarr_of_cooS1,
-    thrust::host_vector<long long int>* H_Aarr_of_cooS2,
-    thrust::host_vector<float>* H_Aarr_of_cooProb,
-    thrust::host_vector<float>* H_Aarr_of_Rs,
-    thrust::host_vector<float> &prob_params,
-    long long int* DP_relv_params,
-    unsigned long int num_DP_params
-    ){
-    //  Convertes floats to int32 for COO row and col idxs
-    //  copies from each action vector to a master vector
-    //  master_coo vectors is concatation first across time, then across action
-    //  ALSO, MODIFIES S1(t,i,j) to S1(t,i,j,a)
-
-    unsigned long long int master_nnz = H_master_cooS1.size();
-    unsigned long long int prob_params_size = prob_params.size();
-    int m_idx = 0;
-    int n_states = DP_relv_params[0];
-
-    std::cout << "in save \n" ;
-
-    for(int i = 0; i < num_actions; i++){
-        for(int j = 0; j< H_Aarr_of_cooS1[i].size(); j++){
-            // TODO: modify to include actions
-            H_master_cooS1[m_idx] = H_Aarr_of_cooS1[i][j] + i*n_states;
-            m_idx++;
-        }
-    }
-
-    std::cout << "in save \n" ;
-    m_idx = 0;
-    for(int i = 0; i < num_actions; i++){
-        for(int j = 0; j< H_Aarr_of_cooS2[i].size(); j++){
-            H_master_cooS2[m_idx] = H_Aarr_of_cooS2[i][j];
-            m_idx++;
-        }
-    }
-
-    std::cout << "in save \n" ;
-    m_idx = 0;
-    for(int i = 0; i < num_actions; i++){
-        for(int j = 0; j< H_Aarr_of_cooProb[i].size(); j++){
-            H_master_cooVal[m_idx] = H_Aarr_of_cooProb[i][j];
-            m_idx++;
-        }
-    }
-
-    std::cout << "in save \n" ;
-    m_idx = 0;
-    for(int i = 0; i < num_actions; i++){
-        for(int j = 0; j< H_Aarr_of_Rs[i].size(); j++){
-            H_master_R[m_idx] = H_Aarr_of_Rs[i][j];
-            m_idx++;
-        }
-    }
-
-    
-    std::cout << "check num_DP_params = " << num_DP_params << std::endl;
-
-    cnpy::npy_save(op_FnamePfx + "master_cooS1.npy", &H_master_cooS1[0], {master_nnz,1},"w");
-    cnpy::npy_save(op_FnamePfx + "master_cooS2.npy", &H_master_cooS2[0], {master_nnz,1},"w");
-    cnpy::npy_save(op_FnamePfx + "master_cooVal.npy", &H_master_cooVal[0], {master_nnz,1},"w");
-    cnpy::npy_save(op_FnamePfx + "master_R.npy", &H_master_R[0], {H_master_R.size(),1},"w");
-    cnpy::npy_save(op_FnamePfx + "DP_relv_params.npy", &DP_relv_params[0], {num_DP_params,1},"w");
-    cnpy::npy_save(op_FnamePfx + "prob_params.npy", &prob_params[0], {prob_params_size,1},"w");
-
-}
-
-
-
-cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elements){
-    // reads numpy file from input and 
-    // returns cnpy::NpyArray stucture  and also fills in num_elements in the passed reference n_elements
-    // extraction in main: float* vel_data = arr.data<float>();
-    // TODO: make it general. currently hard-coded for float arrays.
-
-    //print filename
-    std::cout << "file path and name:   " << file_path_name << std::endl;
-    cnpy::NpyArray arr = cnpy::npy_load(file_path_name);
-
-    //prints for checks 
-    int dim = arr.shape.size();
-    int num_elements = 1;
-    std::cout << "shape: " ;
-    for (int i = 0; i < dim; i++){
-        std::cout << arr.shape[i] << " , " ;
-        num_elements = num_elements*arr.shape[i];
-    }
-    *n_elements = num_elements;
-    std::cout << std::endl << "num_elements: " << num_elements << std::endl;
-
-    float* vel_data = arr.data<float>();
-    // print check first 10 elements
-    std::cout << "First 10 elements of loaded array are: " << std::endl;
-    for (int i = 0; i < 10; i++)
-         std::cout << vel_data[i] << "  " ;
-    
-    std::cout << std::endl << std::endl;
-
-    return arr;
-
-}
-
-void define_xs_or_ys(float* xs, float dx, float x0, int gsize){
-
-    for(int i = 0; i < gsize;  i++)
-        xs[i] = x0 + i*dx;
-}
-
-
-void populate_ac_angles(float* ac_angles, int num_actions){
-    //fills array with equally spaced angles in radians
-    for (int i = 0; i < num_actions; i++)
-        ac_angles[i] = i*(2*M_PI)/num_actions;
-
-}
-
-// -L/usr/local/ -lcnpy -lz --std=c++11 
