@@ -158,9 +158,51 @@ void define_xs_or_ys(float* xs, float dx, float x0, int gsize){
 
 
 
-void populate_ac_angles(float* ac_angles, int num_actions){
+void populate_ac_angles(float* ac_angles, int num_ac_angles){
     //fills array with equally spaced angles in radians
-    for (int i = 0; i < num_actions; i++)
-        ac_angles[i] = i*(2*M_PI)/num_actions;
-
+    for (int i = 0; i < num_ac_angles; i++)
+        ac_angles[i] = i*(2*M_PI)/num_ac_angles;
+    return;
 }
+
+
+
+void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax){
+    //fills array with ac_speeds
+    std::cout << "infunc CHeck- num_ac_speeds = " << num_ac_speeds << "\n";
+    int delF = 0;
+    if (num_ac_speeds == 1)
+        ac_speeds[0] = Fmax;
+    else if (num_ac_speeds > 1){
+        delF = Fmax/(num_ac_speeds-1);
+        for(int i = 0; i<num_ac_speeds; i++)
+            ac_speeds[i] = i*delF;
+    }
+    else
+        std::cout << "Invalid num_ac_speeds\n";
+    
+    return;
+}
+
+
+void populate_actions(float **H_actions, int num_ac_speeds, int num_ac_angles, float Fmax){
+    // populates 2d vector with possible actions
+    float* ac_angles = new float[num_ac_angles];
+    populate_ac_angles(ac_angles, num_ac_angles);
+
+    float* ac_speeds = new float[num_ac_speeds];
+    populate_ac_speeds(ac_speeds, num_ac_speeds, Fmax);
+
+    int idx;
+    for (int i=0; i<num_ac_speeds; i++){
+        for(int j=0; j<num_ac_angles; j++){
+            idx = j + num_ac_angles*i;
+            H_actions[idx][0] = ac_speeds[i];
+            H_actions[idx][1] = ac_angles[j];
+        }
+    }
+
+    return;
+}
+
+

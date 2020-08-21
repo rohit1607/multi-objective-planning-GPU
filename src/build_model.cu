@@ -48,7 +48,8 @@ __device__ void extract_velocity() moved to extract_field.h/cu
 //test: changer from float* to float ac_angle
 __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int eff_chunk_size, long long int ncells, 
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
-                            float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, long long int* results)
+                            float ac_speed, float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, 
+                            long long int* results)
                                     // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
 {
     int32_t gsize = params[0];          // size of grid along 1 direction. ASSUMING square grid.
@@ -80,7 +81,7 @@ __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int 
         extract_velocity(posids, sp_id, ncells, &vx, &vy, T, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi, params);
         
         if (is_terminal(posids[0], posids[1], params) == false)
-            move(ac_angle, vx, vy, T, xs, ys, posids, params, &r);
+            move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
 
         if(idx == 0){
             params[27] = posids[0];
@@ -226,6 +227,8 @@ void print_array(dType* array, int num_elems,std::string array_name, std::string
 }
 
 
+
+
 /*
 --- print_device_vector() moved to utils.h/cu ---
 IMP: datatype has to be explicityle changed in that file
@@ -236,7 +239,8 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
                                         float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                         float*  D_all_vi_arr, float*  D_all_yi_arr,
                                         thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
-                                        thrust::device_vector<float> &D_ys, thrust::host_vector<float> &H_ac_angles,
+                                        thrust::device_vector<float> &D_ys,
+                                        float** H_actions,
                                         thrust::device_vector<long long int> &D_master_vals,
                                         thrust::host_vector<int32_t> &H_coo_len_per_ac,
                                         thrust::host_vector<long long int>* H_Aarr_of_cooS1,
@@ -249,7 +253,8 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
                                 float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                 float*  D_all_vi_arr, float*  D_all_yi_arr,
                                 thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
-                                thrust::device_vector<float> &D_ys, thrust::host_vector<float> &H_ac_angles,
+                                thrust::device_vector<float> &D_ys, 
+                                float** H_actions,
                                 thrust::device_vector<long long int> &D_master_vals,
                                 thrust::host_vector<int32_t> &H_coo_len_per_ac,
                                 thrust::host_vector<long long int>* H_Aarr_of_cooS1,
@@ -347,12 +352,15 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
         for(int n = 0; n < num_actions; n++){
 
             // std::cout <<  std::endl <<"     a = " << n << std::endl;
-            float ac_angle = H_ac_angles[n];
+            // float ac_angle = H_ac_angles[n];
+            float ac_speed = H_actions[n][0];
+            float ac_angle = H_actions[n][1];
 
             // launch kernel for @a @t
             transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, chunkNum, chunk_size, eff_chunk_size, 
-                ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                ac_angle, xs, ys, params, D_master_sumRsa_arr + n*eff_chunk_size, D_master_S2_arr + n*efCszNr);
+                ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr, 
+                ac_speed, ac_angle, xs, ys, params, D_master_sumRsa_arr + n*eff_chunk_size, 
+                D_master_S2_arr + n*efCszNr);
 
             cudaDeviceSynchronize();
 
@@ -637,7 +645,9 @@ int main(){
     float dx = 1; float dy = 1;
     float x0 = dx/2;
     float y0 = dy/2;
-    int32_t num_actions = 8;
+    int num_ac_speeds = 2;
+    int num_ac_angles = 8;
+    int32_t num_actions = num_ac_speeds*num_ac_angles;
     int32_t nrzns = 10;
     int32_t bDimx = nrzns;
     float F = 1;
@@ -732,11 +742,21 @@ int main(){
     define_xs_or_ys(ys, dy, y0, gsize);
 
     // define angles in host
-    thrust::host_vector<float> H_ac_angles(num_actions);
-    float* ac_angles = thrust::raw_pointer_cast(&H_ac_angles[0]);
+    // thrust::host_vector<float> H_ac_angles(num_actions);
+    // float* ac_angles = thrust::raw_pointer_cast(&H_ac_angles[0]);
+    float** H_actions = new float*[num_actions];
+    for(int i=0; i<num_actions; i++)
+        H_actions[i] = new float[2];
+    populate_actions(H_actions, num_ac_speeds, num_ac_angles, F);
+    std::cout << "CHECK:   ACTIONS    \n";
+    for(int i=0; i<num_actions; i++){
+        std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
+    }
+
     //TODO: move to custom functions
-    populate_ac_angles(ac_angles, num_actions);
-    print_array<float>(ac_angles, num_actions, "ac_angles", "\n");
+    // populate_ac_angles(ac_angles, num_actions);
+    // populte_ac_speeds()
+    // print_array<float>(ac_angles, num_actions, "ac_angles", "\n");
 
     //----- start copying data to device --------
 
@@ -840,7 +860,7 @@ int main(){
             // this function also concats coos across time.
             build_sparse_transition_model_at_T(t, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr 
                                                 ,D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                                                D_params, D_xs, D_ys, H_ac_angles, D_master_vals,
+                                                D_params, D_xs, D_ys, H_actions, D_master_vals,
                                                 H_coo_len_per_ac,
                                                 H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
                                                 H_Aarr_of_Rs);

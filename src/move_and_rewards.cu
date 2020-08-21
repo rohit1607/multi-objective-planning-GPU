@@ -32,12 +32,13 @@ __device__ float calculate_reward_const_dt(float* xs, float* ys, int32_t i_old, 
 }
 
 
-__device__ void move(float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* params, float* r ){
+__device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* params, float* r ){
     int32_t gsize = params[0];
     int32_t n = params[0] - 1;      // gsize - 1
     // int32_t num_actions = params[1];
     // int32_t nrzns = params[2];
-    float F = params[3];
+    // float F = params[3];
+    float F = ac_speed;
     float dt = params[4];
     float r_outbound = params[5];
     float r_terminal = params[6];
@@ -122,6 +123,7 @@ __device__ void move(float ac_angle, float vx, float vy, int32_t T, float* xs, f
             }
         }
     // r_step = calculate_reward_const_dt(xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
+    // r_step = calculate_one_step_reward(xs, ys, i0, j0, x, y, posids, params, vnetx, vnety)
     //TODO: change back to normal when needed
     r_step = -dt;
     *r += r_step; //TODO: numerical check remaining
