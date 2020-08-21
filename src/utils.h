@@ -26,6 +26,6 @@ extern void print_device_vector(thrust::device_vector<long long int> &array, int
 extern void make_dir(std::string dir_name);
 extern void populate_ac_angles(float* ac_angles, int num_ac_angles);
 extern void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax);
-void populate_actions(float** H_actions, int num_ac_speeds, int num_ac_angles, float Fmax);
+extern void populate_actions(float** H_actions, int num_ac_speeds, int num_ac_angles, float Fmax);
 
 #endif

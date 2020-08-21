@@ -20,5 +20,5 @@ utils.o: utils.h
 	nvcc --gpu-architecture=sm_50 --device-c utils.cu
 
 clean:
-	rm -f build_model.o get_funcs.o extract_field.o move_and_rewards.o
+	rm -f build_model.o get_funcs.o extract_field.o move_and_rewards.o util.o
 	rm -f bin/build_model

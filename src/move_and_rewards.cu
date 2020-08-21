@@ -32,6 +32,24 @@ __device__ float calculate_reward_const_dt(float* xs, float* ys, int32_t i_old, 
 }
 
 
+__device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float* xs, float* ys, int32_t i_old, int32_t j_old, 
+    float xold, float yold, int32_t* newposids, float* params, float vnet_x, float vnet_y){
+
+        int method = params[13];
+        float dt = params[4];
+
+        if (method == 0)    //time
+            return -dt;
+
+        else if (method == 1){   //energy1
+            return -ac_speed*ac_speed;
+        } 
+
+        else
+            return 0;
+
+    }
+
 __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* params, float* r ){
     int32_t gsize = params[0];
     int32_t n = params[0] - 1;      // gsize - 1
@@ -122,10 +140,9 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
                 // params[26] = 9999;
             }
         }
-    // r_step = calculate_reward_const_dt(xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
-    // r_step = calculate_one_step_reward(xs, ys, i0, j0, x, y, posids, params, vnetx, vnety)
-    //TODO: change back to normal when needed
-    r_step = -dt;
+
+    r_step = calculate_one_step_reward(ac_speed, ac_angle, xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
+    // r_step = -dt;
     *r += r_step; //TODO: numerical check remaining
     if (is_terminal(posids[0], posids[1], params))
         {

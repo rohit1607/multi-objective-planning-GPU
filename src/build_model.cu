@@ -49,9 +49,8 @@ __device__ void extract_velocity() moved to extract_field.h/cu
 __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int eff_chunk_size, long long int ncells, 
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
                             float ac_speed, float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, 
-                            long long int* results)
-                                    // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
-{
+                            long long int* results){
+                            // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
     int32_t gsize = params[0];          // size of grid along 1 direction. ASSUMING square grid.
     int32_t nrzns = params[2];         
     int32_t is_stationary = params[11];
@@ -645,7 +644,7 @@ int main(){
     float dx = 1; float dy = 1;
     float x0 = dx/2;
     float y0 = dy/2;
-    int num_ac_speeds = 2;
+    int num_ac_speeds = 1;
     int num_ac_angles = 8;
     int32_t num_actions = num_ac_speeds*num_ac_angles;
     int32_t nrzns = 10;
@@ -748,7 +747,7 @@ int main(){
     for(int i=0; i<num_actions; i++)
         H_actions[i] = new float[2];
     populate_actions(H_actions, num_ac_speeds, num_ac_angles, F);
-    std::cout << "CHECK:   ACTIONS    \n";
+    std::cout << "CHECK:   ACTIONS:    \n";
     for(int i=0; i<num_actions; i++){
         std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
     }
