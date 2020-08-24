@@ -13,8 +13,7 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     thrust::host_vector<float>* H_Aarr_of_Rs,
     thrust::host_vector<float> &prob_params,
     long long int* DP_relv_params,
-    unsigned long int num_DP_params
-    ){
+    unsigned long int num_DP_params){
     //  Convertes floats to int32 for COO row and col idxs
     //  copies from each action vector to a master vector
     //  master_coo vectors is concatation first across time, then across action
@@ -64,7 +63,8 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
 
     
     std::cout << "check num_DP_params = " << num_DP_params << std::endl;
-
+    std::cout << "op_FnamePfx= " <<  op_FnamePfx << "\n";
+    
     cnpy::npy_save(op_FnamePfx + "master_cooS1.npy", &H_master_cooS1[0], {master_nnz,1},"w");
     cnpy::npy_save(op_FnamePfx + "master_cooS2.npy", &H_master_cooS2[0], {master_nnz,1},"w");
     cnpy::npy_save(op_FnamePfx + "master_cooVal.npy", &H_master_cooVal[0], {master_nnz,1},"w");

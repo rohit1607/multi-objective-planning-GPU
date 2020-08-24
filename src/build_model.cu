@@ -8,6 +8,7 @@
 #include "cnpy.h"
 #include <cmath>
 #include <stdlib.h>
+#include <fstream>
 #include <chrono>
 using namespace std::chrono;
 #include <iostream>
@@ -233,6 +234,21 @@ void print_array(dType* array, int num_elems,std::string array_name, std::string
 IMP: datatype has to be explicityle changed in that file
 */
 
+std::string get_prob_name(int num_ac_speeds, int num_ac_angles, int i_term, int j_term,
+    int tsg_size){
+
+std::string s_n_ac_sp = std::to_string(num_ac_speeds);
+std::string s_n_ac_ac = std::to_string(num_ac_angles);
+std::string s_i = std::to_string(i_term);
+std::string s_j = std::to_string(j_term);
+std::string s_tsg = std::to_string(tsg_size);
+
+std::string name = "a" + s_n_ac_sp + "x" + s_n_ac_ac + "_" 
+  + "i" + s_i + "_" "j" + s_j + "_"
+  + "ref" + s_tsg;
+
+return name;
+}
 
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                         float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
@@ -381,17 +397,16 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
             //     std::cout << H_sumR_sa[i] << std::endl;
             // for(int i = 0; i < 10; i ++)
             //     std::cout << H_S2_vec[i] << std::endl;
-            
         }
 
         int Nthreads = D_master_sumRsa_vector.size();
-        int threads_per_block = 1024;
+        int threads_per_block = 500;
         int blocks_per_grid = (Nthreads/threads_per_block) + 1;
 
         std::cout<<"cmpute_mean\n Nthreads = " << Nthreads << "\n threads_per_block= " << threads_per_block << "\n blocks_per_grid= " <<blocks_per_grid << "\n";
         if ( blocks_per_grid * threads_per_block < Nthreads)
             std::cout << "NOOOOOOOOOOOOOOOO----------------------------\n";
-
+        
         compute_mean<<< blocks_per_grid, threads_per_block >>>(D_master_sumRsa_arr, Nthreads, nrzns);
 
         // TODO: in optimazation phase move this line after initilisation num_uq_S2 vectors.
@@ -402,11 +417,15 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
             // thrust::device_vector<int32_t> D_num_uq_s2(ncells*num_actions,0);
             // thrust::device_vector<int32_t> D_prSum_num_uq_s2(ncells*num_actions);
         //TODO: corner case for last chunk size
+        std::cout << "CHECKING ------------CHECKING-----1\n";
+        std::cout << "efCszNa = " << efCszNa << "\n";
         thrust::device_vector<long long int> D_num_uq_s2_pc(efCszNa,0);
+
         thrust::device_vector<long long int> D_prSum_num_uq_s2_pc(efCszNa);
         long long int* num_uq_s2_ptr = thrust::raw_pointer_cast(&D_num_uq_s2_pc[0]);
         long long int* prSum_num_uq_s2_ptr = thrust::raw_pointer_cast(&D_prSum_num_uq_s2_pc[0]);
-            
+        std::cout << "CHECKING ------------CHECKING-----2\n";
+
             int tprint = nt - 2;
             if (t == tprint)
                 print_device_vector(D_master_S2_vector,0, 10, "pre-sort: D_master_S2_vector", " ", 0);
@@ -415,12 +434,14 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
         // float* D_master_S2_arr_ip = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
         thrust::stable_sort_by_key(D_master_S2_vector.begin(), D_master_S2_vector.end(), D_master_vals.begin());
         thrust::stable_sort_by_key(D_master_vals.begin(), D_master_vals.end(), D_master_S2_vector.begin());
+        std::cout << "CHECKING ------------CHECKING-----3\n";
 
             if (t == tprint)
                 print_device_vector(D_master_S2_vector,0, 10, "post-sort: D_master_S2_vector", " ", 0);
 
         // launch kernel to count nnzs
             // int nblocks = ncells*num_actions;
+        cudaDeviceSynchronize();
         count_kernel<<<efCszNa, 1>>>(D_master_S2_arr, nrzns, num_uq_s2_ptr);
         cudaDeviceSynchronize();
 
@@ -633,44 +654,29 @@ int main(){
     
 // --------------------------------------------------------------------------------
 
- // // 10x10x10 grid. jet across grid varying between 1-2 units/sec.
-    std::string prob_type = "time"; //time, energy1, energy2, energy3
-    std::string prob_name = "for_split_verification_postSplit";
-    std::string op_FnamePfx = "data_modelOutput/" + prob_type + "/" + prob_name + "/"; //path for storing op npy data.
-    
-    int32_t nt = 10;
-    float dt = 1;
-    int32_t gsize = 100;
-    float dx = 1; float dy = 1;
-    float x0 = dx/2;
-    float y0 = dy/2;
-    int num_ac_speeds = 1;
-    int num_ac_angles = 8;
-    int32_t num_actions = num_ac_speeds*num_ac_angles;
-    int32_t nrzns = 10;
-    int32_t bDimx = nrzns;
-    float F = 1;
-    float r_outbound = -100;
-    float r_terminal = 10;
-    // i_term and j_term are (i,j) coords for the TOP LEFT CORNER
-    // of the square subgrid that constitutes the terminal states
-    // int32_t i_term = 4;
-    // int32_t j_term = 7;
-    int32_t i_term = 50;
-    int32_t j_term = 90;
-    // int32_t i_term = 100; //50
-    // int32_t j_term = 180; //90
-    int term_subgrid_size = 1; //number of cells al
-    float nmodes = 1;
 
-    int32_t is_stationary = 0;
+    #include "input_to_build_model.h"
+
     if (nrzns >= 1000)
-        bDimx = 1000;
+    bDimx = 1000;
  
-    float z = -9999;
+    // float z = -9999;
     int reward_type = get_reward_type(prob_type);
-    std::cout << "--- check reward type: " << reward_type << "\n";
+    std::cout << "Reward type: " << reward_type << "\n";
 
+    // define full problem name and print them to a temporary file
+    // the temp file will be read by python scripts for conversion
+    std::string prob_specs = get_prob_name(num_ac_speeds, num_ac_angles, i_term, 
+                                            j_term, term_subgrid_size);
+    std::string op_Fname_upto_prob_name = "data_modelOutput/" + prob_type + "/"
+                                 + prob_name + "/" ;
+    std::string op_FnamePfx = op_Fname_upto_prob_name + prob_specs + "/"; //path for storing op npy data.
+    std::ofstream fout("temp_modelOp_dirName.txt");
+    fout << prob_type << "\n";
+    fout << prob_name << "\n";
+    fout << prob_specs << "\n";
+    fout << op_FnamePfx;
+    fout.close();
 
     // TODO: 1. read paths form file
     //       2. Make sure files are stored in np.float32 format
@@ -684,6 +690,7 @@ int main(){
 // -------------------- input data ends here ---------------------------------
 
     // make directory for storing output data from this file
+    make_dir(op_Fname_upto_prob_name);
     make_dir(op_FnamePfx);
 
     int all_u_n_elms;
@@ -728,7 +735,11 @@ int main(){
     H_params[11] = is_stationary;
     H_params[12] = term_subgrid_size;
     H_params[13] = reward_type;
-    for( int i =14; i<32; i++)
+    H_params[14] = num_ac_speeds;
+    H_params[15] = num_ac_angles;
+    H_params[16] = dx;
+    H_params[17] = dy;
+    for( int i =18; i<32; i++)
         H_params[i] = z;
 
     // Define grid ticks in host

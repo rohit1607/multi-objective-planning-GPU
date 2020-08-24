@@ -34,6 +34,7 @@ ENHANCEMENTS, OR MODIFICATIONS.
 #include <iostream>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
+#include <fstream>
 #include <chrono>
 #include "cnpy.h"
 #include "utils.h"
@@ -706,17 +707,36 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
     {
         return(0);
     }
-
 }
 
+
 int main(){
-    std::string prob_type =         "time";
-    std::string prob_name =         "for_split_verification_postSplit/";
-    std::string model_data_path =   std::string("data_modelOutput/") + prob_type + "/" + prob_name + "/";
-    std::string results_path =      std::string("data_solverOutput/") + prob_type + "/" + prob_name + "/";
+    // std::string prob_type =         "enrgy1";
+    // std::string prob_name =         "for_split_verification_postSplit/";
+    // std::string model_data_path =   std::string("data_modelOutput/") + prob_type + "/" + prob_name + "/";
+    std::string prob_type;
+    std::string prob_name;
+    std::string prob_specs;
+    std::string model_data_path;
+    std::ifstream path_file;
+    // read path from temp_path_file
+    path_file.open("temp_modelOp_dirName.txt");
+    std::getline(path_file, prob_type,'\n');
+    std::getline(path_file, prob_name,'\n');
+    std::getline(path_file, prob_specs,'\n');
+    std::getline(path_file, model_data_path,'\n');
+    path_file.close();
+
+    std::string prob_name_path = std::string("data_solverOutput/") 
+                            + prob_type + "/" + prob_name ;
+    std::string results_path = prob_name_path + "/" + prob_specs + "/";
+
+    std::cout << "CEHCK results_path =" << results_path << "\n";
+    std::cout << prob_type << "\n" << prob_name << "\n" << prob_specs << "\n";
     s_stopping_thresh = 1e-1;
 
     //TODO: make common function and put in utils.h
+    make_dir(prob_name_path);
     make_dir(results_path);
     // int mkdir_status;
     // std::string comm_mkdir = "mkdir ";
@@ -739,6 +759,7 @@ int main(){
 
     solver_spvi_solve(p_out_policy_vec, p_out_value_func_vec,  max_solver_time_s);
 
+    std::cout << "saving policy and value funtion\n";
     cnpy::npy_save(results_path + "policy.npy", &p_out_policy_vec[0], {p_out_policy_vec.size(),1},"w");
     cnpy::npy_save(results_path + "value_function.npy", &p_out_value_func_vec[0], {p_out_value_func_vec.size(),1},"w");
 

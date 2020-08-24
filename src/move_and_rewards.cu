@@ -75,16 +75,16 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     float ynew = y + (vnety * dt);
     
     //checks TODO: remove checks once verified
-    if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-    {
-        params[14] = x;
-        params[15] = y;
-        params[16] = vnetx;
-        params[17] = vnety;
-        params[18] = xnew;
-        params[19] = ynew;
-        params[20] = ac_angle;
-    }
+    // if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
+    // {
+    //     params[14] = x;
+    //     params[15] = y;
+    //     params[16] = vnetx;
+    //     params[17] = vnety;
+    //     params[18] = xnew;
+    //     params[19] = ynew;
+    //     params[20] = ac_angle;
+    // }
     if (xnew > xs[n])
         {
             xnew = xs[n];
@@ -149,16 +149,16 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             *r += r_terminal;
         }
     
-    if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-    {
-        params[19] = xnew;
-        params[20] = ynew;
-        params[21] = yind;
-        params[22] = xind;
-        // params[23] = *r;
-        //params[17] = ynew;
-        //params[18] = ac_angle;
-    }
+    // if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
+    // {
+    //     params[19] = xnew;
+    //     params[20] = ynew;
+    //     params[21] = yind;
+    //     params[22] = xind;
+    //     // params[23] = *r;
+    //     //params[17] = ynew;
+    //     //params[18] = ac_angle;
+    // }
 }
   
 
