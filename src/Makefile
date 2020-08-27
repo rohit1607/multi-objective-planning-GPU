@@ -1,0 +1,50 @@
+all: run_build_model_and_run_solver
+	python ../DDDAS2020_DG3/plot_e2eGPU_policy.py
+
+plot_only:
+	python ../DDDAS2020_DG3/plot_e2eGPU_policy.py
+
+run_build_model_and_run_solver: run_build_model_and_convert_coo run_spvi_only
+	echo "run_build_model_and_run_solver"
+
+run_spvi_only: spvi
+	CUDA_VISIBLE_DEVICES=1 ./bin/spvi_2
+	
+spvi: spvi_2.cu
+	nvcc -o bin/spvi_2 spvi_2.cu utils.cu -L/usr/local/ -lcnpy -lz -L/usr/local/cuda/lib64 -lcusparse -lcudart --std=c++11
+
+run_build_model_and_convert_coo: build_model
+	CUDA_VISIBLE_DEVICES=1 ./bin/build_model
+	python convert_model_datatype.py
+	cp temp_modelOp_dirName.txt ../DDDAS2020_DG3/temp_modelOp_dirName.txt
+
+build_model: build_model.o get_funcs.o extract_field.o move_and_rewards.o utils.o
+	nvcc --gpu-architecture=sm_50 build_model.o get_funcs.o extract_field.o move_and_rewards.o utils.o -L/usr/local/ -lcnpy -lz --std=c++11 --output-file bin/build_model
+
+build_model.o: build_model.cu
+	nvcc --gpu-architecture=sm_50 --device-c build_model.cu
+
+get_funcs.o: get_funcs.cu
+	nvcc --gpu-architecture=sm_50 --device-c get_funcs.cu
+
+extract_field.o: extract_field.cu
+	nvcc --gpu-architecture=sm_50 --device-c extract_field.cu
+
+move_and_rewards.o: move_and_rewards.cu
+	nvcc --gpu-architecture=sm_50 --device-c move_and_rewards.cu
+
+utils.o: utils.h
+	nvcc --gpu-architecture=sm_50 --device-c utils.cu
+
+clean:
+	rm -f build_model.o get_funcs.o extract_field.o move_and_rewards.o utils.o
+	rm -f bin/build_model bin/spvi_2
+	rm -f temp_modelOp_dirName.txt
+
+clean_spvi: 
+	rm -f bin/spvi_2
+	
+clean_build_model:
+	rm -f build_model.o get_funcs.o extract_field.o move_and_rewards.o util.o
+	rm -f bin/build_model 
+	rm -f temp_modelOp_dirName.txt
