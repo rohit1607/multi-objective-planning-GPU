@@ -17,7 +17,7 @@ using namespace std::chrono;
 #include "move_and_rewards.h"
 #include "utils.h"
 
-long long int GPUmem = 8*1000*1000*1000LL; // using 1000 instead of 1024 
+long long int GPUmem = 4*1000*1000*1000LL; // using 1000 instead of 1024 
 int nchunks = 1;
 int chunk_size;
 int last_chunk_size;
@@ -225,8 +225,6 @@ void print_array(dType* array, int num_elems,std::string array_name, std::string
         std::cout << array[i] << " " << end;
     std::cout << std::endl;
 }
-
-
 
 
 /*
@@ -896,13 +894,13 @@ int main(){
     // find nnz per action
     thrust::host_vector<long long int> H_master_PrSum_nnz_per_ac(num_actions);
     long long int DP_relv_params[2] = {ncells*nt, num_actions*1LL};
-    
+
     long long int master_nnz = 0;
     for(int i = 0; i < num_actions; i++){
         master_nnz += H_Aarr_of_cooS1[i].size();
         H_master_PrSum_nnz_per_ac[i] = master_nnz;
     }
-       
+
     print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
     unsigned long int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
     std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;

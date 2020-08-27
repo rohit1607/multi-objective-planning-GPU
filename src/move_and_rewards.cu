@@ -42,7 +42,7 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
             return -dt;
 
         else if (method == 1){   //energy1
-            return -ac_speed*ac_speed;
+            return -ac_speed*ac_speed - 0.001*dt;
         } 
 
         else
@@ -56,6 +56,7 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     // int32_t num_actions = params[1];
     // int32_t nrzns = params[2];
     // float F = params[3];
+    int32_t nt = params[10];
     float F = ac_speed;
     float dt = params[4];
     float r_outbound = params[5];
@@ -148,6 +149,11 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
         {
             *r += r_terminal;
         }
+    else{
+        //reaching any state in the last timestep which is not terminal is penalised
+        if (T == nt-2)
+            *r += r_outbound; 
+    }
     
     // if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
     // {
