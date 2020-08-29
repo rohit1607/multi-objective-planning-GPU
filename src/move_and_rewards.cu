@@ -32,23 +32,30 @@ __device__ float calculate_reward_const_dt(float* xs, float* ys, int32_t i_old, 
 }
 
 
-__device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float* xs, float* ys, int32_t i_old, int32_t j_old, 
-    float xold, float yold, int32_t* newposids, float* params, float vnet_x, float vnet_y){
+__device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float rad1, float rad2, float* params){
 
         int method = params[13];
+        float Cr = 1;       // coeffecient for radaition term
+        float Cf = 1;       // coeffecient for energy consumtion
+        float Ct = 0.001;   // small coeffecient for time for to prevent lazy start
         float dt = params[4];
 
         if (method == 0)    //time
             return -dt;
 
         else if (method == 1){   //energy1
-            return -ac_speed*ac_speed - 0.001*dt;
+            return -(Cf*ac_speed*ac_speed + Ct)*dt;
         } 
+
+        else if (method == 2){  //energy2: maximise (collection-consumption)
+            return ((Cr*(rad2 + rad1)/2) - (Cf*ac_speed*ac_speed) - Ct)*dt;
+        }
 
         else
             return 0;
 
     }
+
 
 __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* params, float* r ){
     int32_t gsize = params[0];
@@ -64,8 +71,6 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     // int32_t nT = params[10];
     float Dj = fabsf(xs[1] - xs[0]);
     float Di = fabsf(ys[1] - ys[0]);
-    float r_step = 0;
-    *r = 0;
     int32_t i0 = posids[0];
     int32_t j0 = posids[1];
     float vnetx = F*cosf(ac_angle) + vx;
@@ -74,6 +79,9 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     get_xypos_from_ij(i0, j0, gsize, xs, ys, &x, &y); // x, y stores centre coords of state i0,j0
     float xnew = x + (vnetx * dt);
     float ynew = y + (vnety * dt);
+    // float r_step = 0;
+    *r = 0;         // intiilaise r with 0
+
     
     //checks TODO: remove checks once verified
     // if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
@@ -128,7 +136,8 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             yind += 1;
         }
     if (!(my_isnan(xind) || my_isnan(yind)))
-        {
+        {   
+            // update posids
             posids[0] = yind;
             posids[1] = xind;
             if (is_edge_state(posids[0], posids[1]))     //line 110
@@ -142,9 +151,9 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             }
         }
 
-    r_step = calculate_one_step_reward(ac_speed, ac_angle, xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
-    // r_step = -dt;
-    *r += r_step; //TODO: numerical check remaining
+    // r_step = calculate_one_step_reward(ac_speed, ac_angle, xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
+    // // r_step = -dt;
+    // *r += r_step; //TODO: numerical check remaining
     if (is_terminal(posids[0], posids[1], params))
         {
             *r += r_terminal;
