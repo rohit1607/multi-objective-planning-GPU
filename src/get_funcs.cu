@@ -35,7 +35,7 @@ __device__ long long int state1D_from_ij(int32_t*  posid, int32_t T, int32_t gsi
         // return (posid[1] + posid[0]*gridDim.x + (T*gridDim.x*gridDim.y) ) ; 
 
     // return value for chunks concept
-    return (posid[1] + posid[0]*gsize + (T*gsize*gsize) ) ; 
+    return (posid[1] + posid[0]*gsize + (T*gsize*gsize)*1LL ) ; 
 
 }
 
@@ -92,6 +92,12 @@ __device__ void get_xypos_from_ij(int32_t i, int32_t j, int32_t gsize ,float* xs
     *y = ys[gsize - 1 - i];
 
     return;
+}
+
+
+__device__ long long int get_sp_id_from_posid(int32_t* posids, int32_t gsize){
+    // gives sp_id from posids (i,j)
+    return posids[1] + gsize*posids[0]*1LL ;
 }
 
 

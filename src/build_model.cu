@@ -49,6 +49,7 @@ __device__ void extract_velocity() moved to extract_field.h/cu
 //test: changer from float* to float ac_angle
 __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int eff_chunk_size, long long int ncells, 
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
+                            float* D_all_s_mat, float* D_all_si_mat, float* D_all_syi_mat,
                             float ac_speed, float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, 
                             long long int* results){
                             // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
@@ -58,9 +59,9 @@ __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int 
     int32_t T = (int32_t)T_arr[0];      // current timestep
     int32_t idx = get_thread_idx();
     long long int new_idx;
-    float vx, vy;
+    float vx, vy, rad1, rad2;
     long long int sp_id = get_sp_id(chunkNum, chunk_size);      //sp_id is space_id. S1%(gsize*gsize)
-
+    long long int sp_id2;
     if(idx < gridDim.x*gridDim.y*nrzns && sp_id < ncells) //or idx < arr_size
     {
         // int32_t posids[2] = {(int32_t)blockIdx.y, (int32_t)blockIdx.x};    //static declaration of array of size 2 to hold i and j values of S1. 
@@ -78,10 +79,22 @@ __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int 
             
         //  Afer move() these will be overwritten by i and j values of S2
         float r=0;              // to store immediate reward
+        float r_step;
+
         extract_velocity(posids, sp_id, ncells, &vx, &vy, T, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi, params);
+        extract_radiation(sp_id, T, ncells, D_all_s_mat, &rad1);
         
-        if (is_terminal(posids[0], posids[1], params) == false)
+        if (is_terminal(posids[0], posids[1], params) == false){
+            // moves agent and adds r_outbound and r_terminal to r
             move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
+            sp_id2 = get_sp_id_from_posid(posids, gsize);
+            extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
+
+            // adds one step-reward based on method. mehthod is available in params
+            r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
+            r += r_step;
+        }
+  
 
         if(idx == 0){
             params[27] = posids[0];
@@ -92,8 +105,6 @@ __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int 
             params[30] = posids[1];
         }
 
-            // int32_t S1, S2;
-        // long long int S1;
         long long int S2;
 
         if (is_stationary == 1)
@@ -251,6 +262,7 @@ return name;
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                         float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                         float*  D_all_vi_arr, float*  D_all_yi_arr,
+                                        float* D_all_s_arr, float*D_all_si_arr, float* D_all_syi_arr,
                                         thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                         thrust::device_vector<float> &D_ys,
                                         float** H_actions,
@@ -265,6 +277,7 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                 float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                 float*  D_all_vi_arr, float*  D_all_yi_arr,
+                                float* D_all_s_arr, float*D_all_si_arr, float* D_all_syi_arr,
                                 thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                 thrust::device_vector<float> &D_ys, 
                                 float** H_actions,
@@ -371,7 +384,8 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
 
             // launch kernel for @a @t
             transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, chunkNum, chunk_size, eff_chunk_size, 
-                ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr, 
+                ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
+                D_all_s_arr, D_all_si_arr, D_all_syi_arr, 
                 ac_speed, ac_angle, xs, ys, params, D_master_sumRsa_arr + n*eff_chunk_size, 
                 D_master_S2_arr + n*efCszNr);
 
@@ -684,6 +698,10 @@ int main(){
     std::string all_ui_fname = data_path + "all_ui_mat.npy";
     std::string all_vi_fname = data_path + "all_vi_mat.npy";
     std::string all_yi_fname = data_path + "all_Yi.npy";
+    std::string all_s_fname = data_path + "all_s_mat.npy";
+    std::string all_si_fname = data_path + "all_si_mat.npy";
+    std::string all_syi_fname = data_path + "all_sYi.npy";
+
 
 // -------------------- input data ends here ---------------------------------
 
@@ -696,18 +714,29 @@ int main(){
     int all_ui_n_elms;
     int all_vi_n_elms;
     int all_yi_n_elms;
+    int all_s_n_elms;
+    int all_si_n_elms;
+    int all_syi_n_elms;
 
     cnpy::NpyArray all_u_cnpy = read_velocity_field_data(all_u_fname, &all_u_n_elms);
     cnpy::NpyArray all_v_cnpy = read_velocity_field_data(all_v_fname, &all_v_n_elms);
     cnpy::NpyArray all_ui_cnpy = read_velocity_field_data(all_ui_fname, &all_ui_n_elms);
     cnpy::NpyArray all_vi_cnpy = read_velocity_field_data(all_vi_fname, &all_vi_n_elms);
     cnpy::NpyArray all_yi_cnpy = read_velocity_field_data(all_yi_fname, &all_yi_n_elms);
+    cnpy::NpyArray all_s_cnpy = read_velocity_field_data(all_s_fname, &all_s_n_elms);
+    cnpy::NpyArray all_si_cnpy = read_velocity_field_data(all_si_fname, &all_si_n_elms);
+    cnpy::NpyArray all_syi_cnpy = read_velocity_field_data(all_syi_fname, &all_syi_n_elms);
+
 
     float* all_u_mat = all_u_cnpy.data<float>();
     float* all_v_mat = all_v_cnpy.data<float>();
     float* all_ui_mat = all_ui_cnpy.data<float>();
     float* all_vi_mat = all_vi_cnpy.data<float>();
     float* all_yi_mat = all_yi_cnpy.data<float>();
+    float* all_s_mat = all_s_cnpy.data<float>();
+    float* all_si_mat = all_si_cnpy.data<float>();
+    float* all_syi_mat = all_syi_cnpy.data<float>();
+
 
     // print_array<float>(all_u_mat, all_u_n_elms, "all_u_mat", " ");
     // print_array<float>(all_ui_mat, all_ui_n_elms,"all_ui_mat", " ");
@@ -737,7 +766,11 @@ int main(){
     H_params[15] = num_ac_angles;
     H_params[16] = dx;
     H_params[17] = dy;
-    for( int i =18; i<32; i++)
+    // radiation field parameters
+    H_params[18] = rad_nrzns;
+    H_params[19] = rad_nmodes;
+
+    for( int i =20; i<32; i++)
         H_params[i] = z;
 
     // Define grid ticks in host
@@ -775,11 +808,22 @@ int main(){
     thrust::device_vector<float> D_all_vi_vec (all_vi_mat, all_vi_mat + all_vi_n_elms);
     thrust::device_vector<float> D_all_yi_vec (all_yi_mat, all_yi_mat + all_yi_n_elms);
 
+    thrust::device_vector<float> D_all_s_vec (all_s_mat, all_s_mat + all_s_n_elms);
+    thrust::device_vector<float> D_all_si_vec (all_si_mat, all_si_mat + all_si_n_elms);
+    thrust::device_vector<float> D_all_syi_vec (all_syi_mat, all_syi_mat + all_syi_n_elms);
+
+
+
     float* D_all_u_arr = thrust::raw_pointer_cast(&D_all_u_vec[0]);
     float* D_all_v_arr = thrust::raw_pointer_cast(&D_all_v_vec[0]);
     float* D_all_ui_arr = thrust::raw_pointer_cast(&D_all_ui_vec[0]);
     float* D_all_vi_arr = thrust::raw_pointer_cast(&D_all_vi_vec[0]);
     float* D_all_yi_arr = thrust::raw_pointer_cast(&D_all_yi_vec[0]);
+
+    float* D_all_s_arr = thrust::raw_pointer_cast(&D_all_s_vec[0]);
+    float* D_all_si_arr = thrust::raw_pointer_cast(&D_all_si_vec[0]);
+    float* D_all_syi_arr = thrust::raw_pointer_cast(&D_all_syi_vec[0]);
+
 
 
     std::cout << "Copied to Device : Velocity Field Data !" << std::endl;
@@ -868,6 +912,7 @@ int main(){
             // this function also concats coos across time.
             build_sparse_transition_model_at_T(t, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr 
                                                 ,D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
+                                                D_all_s_arr, D_all_si_arr, D_all_syi_arr,
                                                 D_params, D_xs, D_ys, H_actions, D_master_vals,
                                                 H_coo_len_per_ac,
                                                 H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,

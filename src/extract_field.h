@@ -6,5 +6,7 @@ extern __device__ void extract_velocity(int32_t* posids, long long int sp_id, lo
                                  int32_t T, float* all_u_mat, float* all_v_mat, float* all_ui_mat, 
                                  float* all_vi_mat, float* all_Yi, float* params);
   
+extern __device__ void extract_radiation(long long int sp_id, int32_t T, long long int ncells, 
+                                         float* all_s_mat, float* rad);
 
 #endif

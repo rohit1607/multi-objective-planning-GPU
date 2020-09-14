@@ -30,6 +30,7 @@ extern __device__ bool my_isnan(int s);
 
 extern __device__ void get_xypos_from_ij(int32_t i, int32_t j, int32_t gsize ,float* xs, float* ys, float* x, float* y);
 
+extern __device__ long long int get_sp_id_from_posid(int32_t* posids, int32_t gsize);
 
 extern __device__ float get_angle_in_0_2pi(float theta);
 
