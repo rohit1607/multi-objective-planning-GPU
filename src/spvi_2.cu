@@ -48,6 +48,7 @@ using namespace std::chrono;
 
 // // Solver interfaces
 // #include "solver_spvi.h"
+// void make_dir(std::string dir_name);
 
 
 static size_t  s_nnz = 0;
@@ -277,9 +278,9 @@ float compute_sup_norm(const float* dev_v1,
         float host_v2[N];
 
         cudaErr = cudaMemcpy(host_v1, dev_v1, (size_t)(N*sizeof(float)), cudaMemcpyDeviceToHost);
-        assert(cudaErr == cudaSuccess);
+        assert(cudaErr == cudaSuccess && "v1 copy failed");
         cudaErr = cudaMemcpy(host_v2, dev_v2, (size_t)(N*sizeof(float)), cudaMemcpyDeviceToHost);
-        assert(cudaErr == cudaSuccess);
+        assert(cudaErr == cudaSuccess && "v2 copy failed");
 
         float max_abs_delta = 0.0f;
         float abs_delta;
@@ -307,13 +308,14 @@ float compute_sup_norm(const float* dev_v1,
             #endif
 
             s_h_reduce_out_vec = (float*)malloc(sizeof(float)*kernel_num_blocks);
-            assert(s_h_reduce_out_vec != NULL);
+            assert(s_h_reduce_out_vec != NULL && "malloc failed");
         }
+
         if (s_d_reduce_out_vec == NULL)
         {
-
+            std::cout << "malloc size= " << kernel_num_blocks*sizeof(float) << "\n";
             cudaErr = cudaMalloc((void**)&s_d_reduce_out_vec, kernel_num_blocks*sizeof(float));
-            assert(cudaErr == cudaSuccess);
+            assert(cudaErr == cudaSuccess&& "malloc2 failed");
         }
 
         // Do first stage reduction using CUDA kernel
@@ -487,7 +489,6 @@ static void get_mdp_model(std::string model_fpath){
     // thrust::device_vector<float> testPV(s_dev_PV, s_dev_PV + s_Ns);
     // for(int i = 0; i < testPV.size(); i++)
     //     std::cout << testPV[i] << std::endl;
-    
 }
 
 static void get_mdp_model_test(){
@@ -710,6 +711,7 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
 }
 
 
+
 int main(){
     // std::string prob_type =         "enrgy1";
     // std::string prob_name =         "for_split_verification_postSplit/";
@@ -771,65 +773,15 @@ int main(){
 
 
 
-// int main(){
-//     auto start = high_resolution_clock::now(); 
-//     int max_solver_time_s = 1;
-//     thrust::host_vector<uint32_t> p_out_policy_vec(0);
-//     thrust::host_vector<float> p_out_value_func_vec(0);
-//     auto end = high_resolution_clock::now(); 
-//     auto duration_t = duration_cast<microseconds>(end - start);
-//     std::cout << "host init time = "<< duration_t.count()/1e6 << std::endl;
-
-//     // Load in MDP from external format
-//     // get_mdp_model_test();
-
-//     get_mdp_model_test();
-//     printf("mdp model laoded\n");
-
-//     start = high_resolution_clock::now(); 
-//     solver_spvi_solve(p_out_policy_vec, p_out_value_func_vec,  max_solver_time_s);
-//     end = high_resolution_clock::now(); 
-//     duration_t = duration_cast<microseconds>(end - start);
-//     std::cout << "solve time = "<< duration_t.count()/1e6 << std::endl;
-
+// void make_dir(std::string dir_name){
+//     int mkdir_status;
+//     std::string comm_mkdir = "mkdir ";
+//     std::string str = comm_mkdir + dir_name;
+//     const char * full_command = str.c_str();
+//     mkdir_status = system(full_command);
+//     std::cout << "mkdir_status = " << mkdir_status << std::endl;
 // }
 
 
 
-
-int test_main(){
-        // ----------------- Inidividual function Tests-----------------
-    //     get_mdp_model_test();
-
-    //     std::cout << "s_nnz = " << s_nnz << std::endl; 
-
-    //     solver_do_backup(
-    //         s_dev_R,
-    //         s_dev_PV,
-    //         s_dev_CV,
-    //         s_dev_CP,
-    //         s_dev_Q);
-    //     std::cout << "s_dev_Q in main" << std::endl;
-    //     thrust::device_vector<float> test(s_dev_Q, s_dev_Q + s_NsNa);
-    //     for(int i = 0; i < test.size(); i++)
-    //         std::cout << test[i] << std::endl;
-
-    //     // check for cactions selection kernel
-    //     std::cout << "testCV- post kernel in main" << std::endl;
-    //     thrust::device_vector<float> testCV(s_dev_CV, s_dev_CV + s_Ns);
-    //     for(int i = 0; i < testCV.size(); i++)
-    //         std::cout << testCV[i] << std::endl;
-
-    //     std::cout << "testPV- post kernel in main" << std::endl;
-    //     thrust::device_vector<float> testPV(s_dev_PV, s_dev_PV + s_Ns);
-    //     for(int i = 0; i < testPV.size(); i++)
-    //         std::cout << testPV[i] << std::endl;
-
-
-    //     float sup_norm = compute_sup_norm((const float*)s_dev_CV, (const float*)s_dev_PV, (uint32_t)s_Ns);
-    //     std::cout << "sup_norm = " << sup_norm << std::endl;
-
-
-    return 0;
-}
 

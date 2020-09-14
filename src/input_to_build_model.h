@@ -2,10 +2,11 @@
 std::string prob_type = "energy2"; //verify num_ac_speeds 
 std::string prob_name = "all_jet_rot1_g50x50x50_r5k_sf1";
 
-int32_t nt = 50;
+int32_t nt = 10;
 float dt = 1;
-int32_t gsize = 50;
+int32_t gsize = 100;
 float dx = 1; float dy = 1;
+
 float x0 = dx/2;
 float y0 = dy/2;
 
