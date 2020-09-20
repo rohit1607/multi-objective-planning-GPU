@@ -1,10 +1,10 @@
 //Prob type: time, energy1, energy2, energy3
 std::string prob_type = "energy2"; //verify num_ac_speeds 
-std::string prob_name = "all_jet_rot1_g50x50x50_r5k_sf1";
+std::string prob_name = "all_jet_rot1_g70x70x5_r5k_sf1";
 
-int32_t nt = 10;
+int32_t nt = 5;
 float dt = 1;
-int32_t gsize = 100;
+int32_t gsize = 70;
 float dx = 1; float dy = 1;
 
 float x0 = dx/2;

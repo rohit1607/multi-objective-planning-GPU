@@ -37,7 +37,7 @@ ENHANCEMENTS, OR MODIFICATIONS.
 #include <fstream>
 #include <chrono>
 #include "cnpy.h"
-#include "utils.h"
+// #include "utils.h"
 
 
 using namespace std::chrono;
@@ -48,7 +48,9 @@ using namespace std::chrono;
 
 // // Solver interfaces
 // #include "solver_spvi.h"
-// void make_dir(std::string dir_name);
+
+// Declareing function
+void make_dir(std::string dir_name);
 
 
 static size_t  s_nnz = 0;
@@ -269,6 +271,7 @@ float compute_sup_norm(const float* dev_v1,
     cudaError_t cudaErr;
 
     // #warning "Temp hack using CPU Sup Norm!"
+    std::cout << "kernel_num_blocks= " << kernel_num_blocks << "\n";
 
     // USE CPU version for now
     if (kernel_num_blocks == 0)
@@ -298,10 +301,13 @@ float compute_sup_norm(const float* dev_v1,
     else
     {
         // USE GPU VERSION
+        std::cout << "N =" << N << "\n";
+
         if (s_h_reduce_out_vec == NULL)
         {
             // TODO - We could allocate these earlier. Doing them here since size is a function of
             // kernel_num_blocks
+            std::cout << "in if: s_h_reduce_out_vec == NULL\n";
 
             #ifdef ALLOW_PRINTS
             printf("N = %d, NB = %d, NT = %d\n", N, kernel_num_blocks, kernel_num_threads);
@@ -313,11 +319,18 @@ float compute_sup_norm(const float* dev_v1,
 
         if (s_d_reduce_out_vec == NULL)
         {
+            cudaError_t cudaErr_malloc;
+            std::cout << "in if: s_d_reduce_out_vec == NULL\n";
             std::cout << "malloc size= " << kernel_num_blocks*sizeof(float) << "\n";
-            cudaErr = cudaMalloc((void**)&s_d_reduce_out_vec, kernel_num_blocks*sizeof(float));
-            assert(cudaErr == cudaSuccess&& "malloc2 failed");
+            cudaErr_malloc = cudaMalloc((void**)&s_d_reduce_out_vec, (size_t)kernel_num_blocks*sizeof(float));
+            std::cout << "cudaErr_malloc = " << cudaErr_malloc << "\n";
+            std::cout << "s_d_reduce_out_vec= " << s_d_reduce_out_vec << "\n";
+            std::cout << "&s_d_reduce_out_vec= " << &s_d_reduce_out_vec << "\n";
+
+            assert(cudaErr_malloc == cudaSuccess && "malloc2 failed");
         }
 
+        std::cout << "pre-reduce-sup-norm-kernel\n";
         // Do first stage reduction using CUDA kernel
         // This leaves a length kernel_num_blocks array that needs to still be reduced
         reduce_sup_norm<<<kernel_num_blocks, kernel_num_threads, kernel_num_threads*sizeof(float)>>>(dev_v1, dev_v2, s_d_reduce_out_vec, N);
@@ -491,148 +504,149 @@ static void get_mdp_model(std::string model_fpath){
     //     std::cout << testPV[i] << std::endl;
 }
 
-static void get_mdp_model_test(){
-    s_discount_factor = 1;
-    int s_ncells = 200000;
-    int s_nt =100;
-    int s_nu =2;
-    int s_num_actions = 8;
-    uint dummy_nnz =  s_ncells * s_nu * (s_nt-1) * s_num_actions;
-    uint nnz_per_ac = s_ncells * s_nu * (s_nt-1);
-    float threshold = 1e-2;
 
-    s_Ns = s_ncells * s_nt;
-    s_Na = s_num_actions;
+// static void get_mdp_model_test(){
+//     s_discount_factor = 1;
+//     int s_ncells = 200000;
+//     int s_nt =100;
+//     int s_nu =2;
+//     int s_num_actions = 8;
+//     uint dummy_nnz =  s_ncells * s_nu * (s_nt-1) * s_num_actions;
+//     uint nnz_per_ac = s_ncells * s_nu * (s_nt-1);
+//     float threshold = 1e-2;
 
-    s_NsNa = s_Ns*s_Na;
-    s_Ns2Na = s_Ns*s_Ns*s_Na;
+//     s_Ns = s_ncells * s_nt;
+//     s_Na = s_num_actions;
 
-    // float eps = 0.5f;
-    s_stopping_thresh = threshold;
-    s_nnz = dummy_nnz; // cam get from master_coo host_vector.size()
-    std::cout << "nnz = " << s_nnz << "\n";
+//     s_NsNa = s_Ns*s_Na;
+//     s_Ns2Na = s_Ns*s_Ns*s_Na;
 
-    //TODO: load np array to host_vector
-    thrust::host_vector<int32_t> hA_cooRows_vec( s_nnz);
-    thrust::host_vector<int32_t> hA_columns_vec( s_nnz);
-    thrust::host_vector<float> hA_values_vec( s_nnz);
-    thrust::host_vector<float> host_R_vec(s_NsNa);
-    thrust::host_vector<float> s_host_PV_vec(s_Ns, 0);
-    // thrust::host_vector<float> hY_vec(s_Ns, 0);
+//     // float eps = 0.5f;
+//     s_stopping_thresh = threshold;
+//     s_nnz = dummy_nnz; // cam get from master_coo host_vector.size()
+//     std::cout << "nnz = " << s_nnz << "\n";
 
-    int32_t* s_host_cooRowIndex= thrust::raw_pointer_cast(&hA_cooRows_vec[0]);
-    int32_t* s_host_cooColIndex = thrust::raw_pointer_cast(&hA_columns_vec[0]); 
-    float* s_host_cooVal = thrust::raw_pointer_cast(&hA_values_vec[0]);    
-    float* host_R = thrust::raw_pointer_cast(&host_R_vec[0]);
-    float* s_host_PV = thrust::raw_pointer_cast(&s_host_PV_vec[0]);
-    int col_st;
+//     //TODO: load np array to host_vector
+//     thrust::host_vector<int32_t> hA_cooRows_vec( s_nnz);
+//     thrust::host_vector<int32_t> hA_columns_vec( s_nnz);
+//     thrust::host_vector<float> hA_values_vec( s_nnz);
+//     thrust::host_vector<float> host_R_vec(s_NsNa);
+//     thrust::host_vector<float> s_host_PV_vec(s_Ns, 0);
+//     // thrust::host_vector<float> hY_vec(s_Ns, 0);
 
-    for(int i = 0; i < s_nnz; i++){
-        hA_cooRows_vec[i] = ((i%nnz_per_ac)/s_nu) + s_Ns*(i/nnz_per_ac);
+//     int32_t* s_host_cooRowIndex= thrust::raw_pointer_cast(&hA_cooRows_vec[0]);
+//     int32_t* s_host_cooColIndex = thrust::raw_pointer_cast(&hA_columns_vec[0]); 
+//     float* s_host_cooVal = thrust::raw_pointer_cast(&hA_values_vec[0]);    
+//     float* host_R = thrust::raw_pointer_cast(&host_R_vec[0]);
+//     float* s_host_PV = thrust::raw_pointer_cast(&s_host_PV_vec[0]);
+//     int col_st;
 
-        col_st = (((i%nnz_per_ac)/(s_ncells*s_nu)) + 1)*s_ncells;
-        hA_columns_vec[i] = col_st + (i%s_nu);
+//     for(int i = 0; i < s_nnz; i++){
+//         hA_cooRows_vec[i] = ((i%nnz_per_ac)/s_nu) + s_Ns*(i/nnz_per_ac);
 
-        hA_values_vec[i] = 1.0/s_nu;
-    }
+//         col_st = (((i%nnz_per_ac)/(s_ncells*s_nu)) + 1)*s_ncells;
+//         hA_columns_vec[i] = col_st + (i%s_nu);
 
-    for(int i = 0; i < s_NsNa; i++){
-        host_R[i] = 10*(i/s_Ns) + i;
-    }
-    std::cout << std::endl;
+//         hA_values_vec[i] = 1.0/s_nu;
+//     }
 
-    // //  check coo intilisations
-    // for(int i = 0; i < s_nnz; i++)
-    //     std::cout << hA_cooRows_vec[i] << ", " ;
-    // std::cout << std::endl;
-    // for(int i = 0; i < s_nnz; i++)
-    //     std::cout << hA_columns_vec[i] << ", " ;   
-    // std::cout << std::endl; 
-    // for(int i = 0; i < s_nnz; i++)
-    //     std::cout << hA_values_vec[i] << ", " ;  
-    // std::cout << std::endl;  
-    // for(int i = 0; i < s_NsNa; i++)
-    //     std::cout << host_R[i] << ", " ;  
-    // std::cout << std::endl;  
+//     for(int i = 0; i < s_NsNa; i++){
+//         host_R[i] = 10*(i/s_Ns) + i;
+//     }
+//     std::cout << std::endl;
 
-    auto start = high_resolution_clock::now(); 
+//     // //  check coo intilisations
+//     // for(int i = 0; i < s_nnz; i++)
+//     //     std::cout << hA_cooRows_vec[i] << ", " ;
+//     // std::cout << std::endl;
+//     // for(int i = 0; i < s_nnz; i++)
+//     //     std::cout << hA_columns_vec[i] << ", " ;   
+//     // std::cout << std::endl; 
+//     // for(int i = 0; i < s_nnz; i++)
+//     //     std::cout << hA_values_vec[i] << ", " ;  
+//     // std::cout << std::endl;  
+//     // for(int i = 0; i < s_NsNa; i++)
+//     //     std::cout << host_R[i] << ", " ;  
+//     // std::cout << std::endl;  
 
-    cudaError_t cudaStat;
-    // Previous value function (init to zero)
-    cudaStat = cudaMalloc((void**)&s_dev_PV, s_Ns*sizeof(float));
-    assert(cudaStat == cudaSuccess);
+//     auto start = high_resolution_clock::now(); 
 
-    cudaStat = cudaMalloc((void**)&s_dev_CV, s_Ns*sizeof(float));
-    assert(cudaStat == cudaSuccess);
+//     cudaError_t cudaStat;
+//     // Previous value function (init to zero)
+//     cudaStat = cudaMalloc((void**)&s_dev_PV, s_Ns*sizeof(float));
+//     assert(cudaStat == cudaSuccess);
 
-    cudaStat = cudaMalloc((void**)&s_dev_CP, s_Ns*sizeof(int32_t));
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMalloc((void**)&s_dev_CV, s_Ns*sizeof(float));
+//     assert(cudaStat == cudaSuccess);
 
-    cudaStat = cudaMalloc((void**)&s_dev_Q, s_NsNa*sizeof(float));
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMalloc((void**)&s_dev_CP, s_Ns*sizeof(int32_t));
+//     assert(cudaStat == cudaSuccess);
 
-    // Rewards
-    cudaStat = cudaMalloc((void**)&s_dev_R, s_NsNa*sizeof(float));
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMalloc((void**)&s_dev_Q, s_NsNa*sizeof(float));
+//     assert(cudaStat == cudaSuccess);
 
-    // STMs
-    cudaStat = cudaMalloc((void**)&s_dev_cooRowIndex, s_nnz*sizeof(int32_t));
-    assert(cudaStat == cudaSuccess);
+//     // Rewards
+//     cudaStat = cudaMalloc((void**)&s_dev_R, s_NsNa*sizeof(float));
+//     assert(cudaStat == cudaSuccess);
 
-    cudaStat = cudaMalloc((void**)&s_dev_cooColIndex, s_nnz*sizeof(int32_t));
-    assert(cudaStat == cudaSuccess);
+//     // STMs
+//     cudaStat = cudaMalloc((void**)&s_dev_cooRowIndex, s_nnz*sizeof(int32_t));
+//     assert(cudaStat == cudaSuccess);
 
-    cudaStat = cudaMalloc((void**)&s_dev_cooVal, s_nnz*sizeof(float));
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMalloc((void**)&s_dev_cooColIndex, s_nnz*sizeof(int32_t));
+//     assert(cudaStat == cudaSuccess);
+
+//     cudaStat = cudaMalloc((void**)&s_dev_cooVal, s_nnz*sizeof(float));
+//     assert(cudaStat == cudaSuccess);
 
 
-    // -------------------------------------
-    // Copy data to device
-    // -------------------------------------
+//     // -------------------------------------
+//     // Copy data to device
+//     // -------------------------------------
 
-    cudaStat = cudaMemcpy(s_dev_PV, s_host_PV, (size_t)(s_Ns*sizeof(float)), cudaMemcpyHostToDevice);
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMemcpy(s_dev_PV, s_host_PV, (size_t)(s_Ns*sizeof(float)), cudaMemcpyHostToDevice);
+//     assert(cudaStat == cudaSuccess);
 
-    // Copy STM from host to device
-    cudaStat = cudaMemcpy(s_dev_cooRowIndex, s_host_cooRowIndex, (size_t)(s_nnz*sizeof(int32_t)), cudaMemcpyHostToDevice);
-    assert(cudaStat == cudaSuccess);
+//     // Copy STM from host to device
+//     cudaStat = cudaMemcpy(s_dev_cooRowIndex, s_host_cooRowIndex, (size_t)(s_nnz*sizeof(int32_t)), cudaMemcpyHostToDevice);
+//     assert(cudaStat == cudaSuccess);
 
-    cudaStat = cudaMemcpy(s_dev_cooColIndex, s_host_cooColIndex, (size_t)(s_nnz*sizeof(int32_t)), cudaMemcpyHostToDevice);
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMemcpy(s_dev_cooColIndex, s_host_cooColIndex, (size_t)(s_nnz*sizeof(int32_t)), cudaMemcpyHostToDevice);
+//     assert(cudaStat == cudaSuccess);
 
-    cudaStat = cudaMemcpy(s_dev_cooVal, s_host_cooVal, (size_t)(s_nnz*sizeof(float)), cudaMemcpyHostToDevice);
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMemcpy(s_dev_cooVal, s_host_cooVal, (size_t)(s_nnz*sizeof(float)), cudaMemcpyHostToDevice);
+//     assert(cudaStat == cudaSuccess);
 
-    cudaStat = cudaMemcpy(s_dev_R, host_R, (size_t)(s_NsNa*sizeof(float)), cudaMemcpyHostToDevice);
-    assert(cudaStat == cudaSuccess);
+//     cudaStat = cudaMemcpy(s_dev_R, host_R, (size_t)(s_NsNa*sizeof(float)), cudaMemcpyHostToDevice);
+//     assert(cudaStat == cudaSuccess);
 
-    cusparseCreate(&s_handle);
-    cusparseCreateCoo(&s_stms_descr, 
-                        s_NsNa,     // num of rows in concated matrix
-                        s_Ns,       // num of cols in cocated matrix
-                        s_nnz,      // num of nnz in concated matrix
-                        s_dev_cooRowIndex, // hA
-                        s_dev_cooColIndex, 
-                        s_dev_cooVal,
-                        CUSPARSE_INDEX_32I,
-                        CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
+//     cusparseCreate(&s_handle);
+//     cusparseCreateCoo(&s_stms_descr, 
+//                         s_NsNa,     // num of rows in concated matrix
+//                         s_Ns,       // num of cols in cocated matrix
+//                         s_nnz,      // num of nnz in concated matrix
+//                         s_dev_cooRowIndex, // hA
+//                         s_dev_cooColIndex, 
+//                         s_dev_cooVal,
+//                         CUSPARSE_INDEX_32I,
+//                         CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
 
-    auto end = high_resolution_clock::now(); 
-    auto duration_t = duration_cast<microseconds>(end - start);
-    std::cout << "alloacte and copy duration = "<< duration_t.count()/1e6 << std::endl;
-    // std::cout << "testPV[i]- init" << std::endl;
-    // thrust::device_vector<float> testPV(s_dev_PV, s_dev_PV + s_Ns);
-    // for(int i = 0; i < testPV.size(); i++)
-    //     std::cout << testPV[i] << std::endl;
-    int32_t DP_relv_params[2] = {s_Ns, s_Na};
-    thrust::host_vector<int32_t> DP_relv_params_vec(DP_relv_params, DP_relv_params+2);
-    cnpy::npy_save("master_cooS1.npy", &hA_cooRows_vec[0], {hA_cooRows_vec.size(),1},"w");
-    cnpy::npy_save("master_cooS2.npy", &hA_columns_vec[0], {hA_columns_vec.size(),1},"w");
-    cnpy::npy_save("master_cooVal.npy", &hA_values_vec[0], {hA_values_vec.size(),1},"w");
-    cnpy::npy_save("master_R.npy", &host_R_vec[0], {host_R_vec.size(),1},"w");
-    cnpy::npy_save("DP_relv_params.npy", &DP_relv_params_vec[0], {DP_relv_params_vec.size(),1},"w");
+//     auto end = high_resolution_clock::now(); 
+//     auto duration_t = duration_cast<microseconds>(end - start);
+//     std::cout << "alloacte and copy duration = "<< duration_t.count()/1e6 << std::endl;
+//     // std::cout << "testPV[i]- init" << std::endl;
+//     // thrust::device_vector<float> testPV(s_dev_PV, s_dev_PV + s_Ns);
+//     // for(int i = 0; i < testPV.size(); i++)
+//     //     std::cout << testPV[i] << std::endl;
+//     int32_t DP_relv_params[2] = {s_Ns, s_Na};
+//     thrust::host_vector<int32_t> DP_relv_params_vec(DP_relv_params, DP_relv_params+2);
+//     cnpy::npy_save("master_cooS1.npy", &hA_cooRows_vec[0], {hA_cooRows_vec.size(),1},"w");
+//     cnpy::npy_save("master_cooS2.npy", &hA_columns_vec[0], {hA_columns_vec.size(),1},"w");
+//     cnpy::npy_save("master_cooVal.npy", &hA_values_vec[0], {hA_values_vec.size(),1},"w");
+//     cnpy::npy_save("master_R.npy", &host_R_vec[0], {host_R_vec.size(),1},"w");
+//     cnpy::npy_save("DP_relv_params.npy", &DP_relv_params_vec[0], {DP_relv_params_vec.size(),1},"w");
 
-}
+// }
 
 int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec, 
                         thrust::host_vector<float>  &p_out_value_func_vec, 
@@ -665,7 +679,9 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
                 s_dev_Q);
 
         // Compute stopping criteria
+        cudaDeviceSynchronize();
         float sup_norm = compute_sup_norm((const float*)s_dev_CV, (const float*)s_dev_PV, (uint32_t)s_Ns);
+        cudaDeviceSynchronize();
 
         if (sup_norm < s_stopping_thresh)
         {
@@ -773,14 +789,14 @@ int main(){
 
 
 
-// void make_dir(std::string dir_name){
-//     int mkdir_status;
-//     std::string comm_mkdir = "mkdir ";
-//     std::string str = comm_mkdir + dir_name;
-//     const char * full_command = str.c_str();
-//     mkdir_status = system(full_command);
-//     std::cout << "mkdir_status = " << mkdir_status << std::endl;
-// }
+void make_dir(std::string dir_name){
+    int mkdir_status;
+    std::string comm_mkdir = "mkdir ";
+    std::string str = comm_mkdir + dir_name;
+    const char * full_command = str.c_str();
+    mkdir_status = system(full_command);
+    std::cout << "mkdir_status = " << mkdir_status << std::endl;
+}
 
 
 

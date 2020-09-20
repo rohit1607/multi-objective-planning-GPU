@@ -393,7 +393,7 @@ __device__ void extract_radiation(long long int sp_id, int32_t T, long long int 
 //test: changer from float* to float ac_angle
 __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int eff_chunk_size, long long int ncells, 
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
-                            float* D_all_s_mat, float* D_all_si_mat, float* D_all_syi_mat,
+                            float* D_all_s_mat,
                             float ac_speed, float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, 
                             long long int* results){
                             // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
@@ -588,25 +588,25 @@ IMP: datatype has to be explicityle changed in that file
 */
 
 std::string get_prob_name(int num_ac_speeds, int num_ac_angles, int i_term, int j_term,
-    int tsg_size){
+                            int tsg_size){
 
-std::string s_n_ac_sp = std::to_string(num_ac_speeds);
-std::string s_n_ac_ac = std::to_string(num_ac_angles);
-std::string s_i = std::to_string(i_term);
-std::string s_j = std::to_string(j_term);
-std::string s_tsg = std::to_string(tsg_size);
+    std::string s_n_ac_sp = std::to_string(num_ac_speeds);
+    std::string s_n_ac_ac = std::to_string(num_ac_angles);
+    std::string s_i = std::to_string(i_term);
+    std::string s_j = std::to_string(j_term);
+    std::string s_tsg = std::to_string(tsg_size);
 
-std::string name = "a" + s_n_ac_sp + "x" + s_n_ac_ac + "_" 
-  + "i" + s_i + "_" "j" + s_j + "_"
-  + "ref" + s_tsg;
+    std::string name = "a" + s_n_ac_sp + "x" + s_n_ac_ac + "_" 
+                        + "i" + s_i + "_" "j" + s_j + "_"
+                        + "ref" + s_tsg;
 
-return name;
+    return name;
 }
 
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                         float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                         float*  D_all_vi_arr, float*  D_all_yi_arr,
-                                        float* D_all_s_arr, float*D_all_si_arr, float* D_all_syi_arr,
+                                        float* D_all_s_arr,
                                         thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                         thrust::device_vector<float> &D_ys,
                                         float** H_actions,
@@ -621,7 +621,7 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                 float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                 float*  D_all_vi_arr, float*  D_all_yi_arr,
-                                float* D_all_s_arr, float*D_all_si_arr, float* D_all_syi_arr,
+                                float* D_all_s_arr,
                                 thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                 thrust::device_vector<float> &D_ys, 
                                 float** H_actions,
@@ -729,7 +729,7 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
             // launch kernel for @a @t
             transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, chunkNum, chunk_size, eff_chunk_size, 
                 ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                D_all_s_arr, D_all_si_arr, D_all_syi_arr, 
+                D_all_s_arr,
                 ac_speed, ac_angle, xs, ys, params, D_master_sumRsa_arr + n*eff_chunk_size, 
                 D_master_S2_arr + n*efCszNr);
 
@@ -818,8 +818,6 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
         // }
         
         // std::cout << "cnt1 = " << cnt1 << "\ncnt2 = " << cnt2 <<"\n";
-
-
 
 
         // calc nnz_xa_pc: number of non zero elements(or unique S2s) across(multiplied by) num_actions actions for a given chunk
@@ -933,16 +931,19 @@ void get_cell_chunk_partition(int gsize, int ncells, int nrzns, int num_actions,
 
     int local_chunk_size = (int) (GPUmem/denom);
     if (local_chunk_size < ncells){
+        std::cout << "----Partition case 1:\n";
         *chunk_size = local_chunk_size;
         *nchunks = (ncells/local_chunk_size) + 1;
         *last_chunk_size = ncells - ( (local_chunk_size)*(*nchunks - 1) );
     }
     else{
+        std::cout << "----Partition case 2:\n";
         *chunk_size = ncells/2;
         *last_chunk_size = ncells/2;
         *nchunks = 2;
     }
-
+    std::cout << "ncells = " << ncells << "\n";
+    std::cout << "local_chunk_size = " << local_chunk_size << "\n";
     std::cout << "nchunks = " << *nchunks << "\n" 
     << "chunk_size = " << *chunk_size << "\n" 
     << "last_chunk_size = " << *last_chunk_size << "\n";
@@ -1043,8 +1044,7 @@ int main(){
     std::string all_vi_fname = data_path + "all_vi_mat.npy";
     std::string all_yi_fname = data_path + "all_Yi.npy";
     std::string all_s_fname = data_path + "all_s_mat.npy";
-    std::string all_si_fname = data_path + "all_si_mat.npy";
-    std::string all_syi_fname = data_path + "all_sYi.npy";
+
 
 
 // -------------------- input data ends here ---------------------------------
@@ -1059,8 +1059,7 @@ int main(){
     int all_vi_n_elms;
     int all_yi_n_elms;
     int all_s_n_elms;
-    int all_si_n_elms;
-    int all_syi_n_elms;
+
 
     cnpy::NpyArray all_u_cnpy = read_velocity_field_data(all_u_fname, &all_u_n_elms);
     cnpy::NpyArray all_v_cnpy = read_velocity_field_data(all_v_fname, &all_v_n_elms);
@@ -1068,8 +1067,6 @@ int main(){
     cnpy::NpyArray all_vi_cnpy = read_velocity_field_data(all_vi_fname, &all_vi_n_elms);
     cnpy::NpyArray all_yi_cnpy = read_velocity_field_data(all_yi_fname, &all_yi_n_elms);
     cnpy::NpyArray all_s_cnpy = read_velocity_field_data(all_s_fname, &all_s_n_elms);
-    cnpy::NpyArray all_si_cnpy = read_velocity_field_data(all_si_fname, &all_si_n_elms);
-    cnpy::NpyArray all_syi_cnpy = read_velocity_field_data(all_syi_fname, &all_syi_n_elms);
 
 
     float* all_u_mat = all_u_cnpy.data<float>();
@@ -1078,8 +1075,6 @@ int main(){
     float* all_vi_mat = all_vi_cnpy.data<float>();
     float* all_yi_mat = all_yi_cnpy.data<float>();
     float* all_s_mat = all_s_cnpy.data<float>();
-    float* all_si_mat = all_si_cnpy.data<float>();
-    float* all_syi_mat = all_syi_cnpy.data<float>();
 
 
     // print_array<float>(all_u_mat, all_u_n_elms, "all_u_mat", " ");
@@ -1151,10 +1146,7 @@ int main(){
     thrust::device_vector<float> D_all_ui_vec (all_ui_mat, all_ui_mat + all_ui_n_elms);
     thrust::device_vector<float> D_all_vi_vec (all_vi_mat, all_vi_mat + all_vi_n_elms);
     thrust::device_vector<float> D_all_yi_vec (all_yi_mat, all_yi_mat + all_yi_n_elms);
-
     thrust::device_vector<float> D_all_s_vec (all_s_mat, all_s_mat + all_s_n_elms);
-    thrust::device_vector<float> D_all_si_vec (all_si_mat, all_si_mat + all_si_n_elms);
-    thrust::device_vector<float> D_all_syi_vec (all_syi_mat, all_syi_mat + all_syi_n_elms);
 
 
 
@@ -1163,11 +1155,7 @@ int main(){
     float* D_all_ui_arr = thrust::raw_pointer_cast(&D_all_ui_vec[0]);
     float* D_all_vi_arr = thrust::raw_pointer_cast(&D_all_vi_vec[0]);
     float* D_all_yi_arr = thrust::raw_pointer_cast(&D_all_yi_vec[0]);
-
     float* D_all_s_arr = thrust::raw_pointer_cast(&D_all_s_vec[0]);
-    float* D_all_si_arr = thrust::raw_pointer_cast(&D_all_si_vec[0]);
-    float* D_all_syi_arr = thrust::raw_pointer_cast(&D_all_syi_vec[0]);
-
 
 
     std::cout << "Copied to Device : Velocity Field Data !" << std::endl;
@@ -1256,7 +1244,7 @@ int main(){
             // this function also concats coos across time.
             build_sparse_transition_model_at_T(t, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr 
                                                 ,D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                                                D_all_s_arr, D_all_si_arr, D_all_syi_arr,
+                                                D_all_s_arr,
                                                 D_params, D_xs, D_ys, H_actions, D_master_vals,
                                                 H_coo_len_per_ac,
                                                 H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,

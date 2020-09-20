@@ -11,10 +11,10 @@ run_spvi_only: spvi
 	CUDA_VISIBLE_DEVICES=0 ./bin/spvi_2
 	
 spvi: spvi_2.cu
-	nvcc -o bin/spvi_2 spvi_2.cu utils.cu -L/usr/local/ -lcnpy -lz -L/usr/local/cuda/lib64 -lcusparse -lcudart --std=c++11
+	nvcc -o bin/spvi_2 spvi_2.cu -L/usr/local/ -lcnpy -lz -L/usr/local/cuda/lib64 -lcusparse -lcudart --std=c++11
 
 run_build_model_and_convert_coo: build_model
-	CUDA_VISIBLE_DEVICES=$(dev) ./bin/build_model
+	CUDA_VISIBLE_DEVICES=0 ./bin/build_model
 	python convert_model_datatype.py
 	cp temp_modelOp_dirName.txt ../DDDAS2020_DG3/temp_modelOp_dirName.txt
 
