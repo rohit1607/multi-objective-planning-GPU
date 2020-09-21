@@ -132,6 +132,15 @@ __device__ bool is_edge_state(int32_t i, int32_t j){
 }
 
 
+__device__ bool is_in_obstacle(int sp_id, int T, long long int ncells, int* all_mask_mat){
+    //returns true if obstacle is present in state T,i,j
+
+    long long int mean_id = state1D_from_thread(T, sp_id, ncells);
+    return(all_mask_mat[mean_id] == 1 );
+
+}
+
+
 __device__ bool is_terminal(int32_t i, int32_t j, float* params){
     // terminal state indices (of UL corner of terminal subgrid if term_subgrid_size>1)
     int32_t i_term = params[8];         
@@ -290,7 +299,7 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             // update posids
             posids[0] = yind;
             posids[1] = xind;
-            if (is_edge_state(posids[0], posids[1]))     //line 110
+            if (is_edge_state(posids[0], posids[1]))  //line 110
                 {
                     *r += r_outbound;
                 }
@@ -386,6 +395,65 @@ __device__ void extract_radiation(long long int sp_id, int32_t T, long long int 
 }
 
 
+__device__ bool is_within_band(int i, int j, int i1, int j1, int i2, int j2, float* xs, float* ys, int gsize){
+    //returns true if i,j are within the band connecticng cells i1,j1 and i2,j2
+
+    if(i1==i2 || j1==j2){
+        return true;
+    }
+    else{
+        float x, y, x1, y1, x2, y2;
+        float cell_diag = fabsf(xs[1]-xs[0])*1.414213;
+        get_xypos_from_ij(i, j, gsize, xs, ys, &x, &y); // x, y stores centre coords of state i0,j0
+        get_xypos_from_ij(i1, j1, gsize, xs, ys, &x1, &y1); 
+        get_xypos_from_ij(i2, j2, gsize, xs, ys, &x2, &y2);
+        float A = (y2-y1)/(x2-x1);
+        float B = -1;
+        float C = y1 - (A*x1);
+        float dist_btw_pt_line = fabsf(A*x + B*y + C)/sqrtf((A*A) + (B*B));
+        
+        if (dist_btw_pt_line < cell_diag)
+            return true;
+        else
+            return false;
+    }
+}
+
+
+__device__ bool goes_through_obstacle(long long int sp_id1, long long int sp_id2, int T, 
+                                        long long int ncells, int* D_all_mask_mat, 
+                                        float* xs, float* ys, float* params){
+
+    // returns true if the transition involves going through obstacle
+
+    bool possible_collision = false;
+    int posid1[2];
+    int posid2[2];
+    int gsize = params[0];
+    long long int sp_id;
+    get_posids_from_sp_id(sp_id1, gsize, posid1);
+    get_posids_from_sp_id(sp_id2, gsize, posid2);
+    int imin = min(posid1[0], posid2[0]);
+    int imax = max(posid1[0], posid2[0]);
+    int jmin = min(posid1[1], posid2[1]);
+    int jmax = max(posid1[1], posid2[1]);
+    
+    for(int i=imin; i<=imax; i++){
+        for(int j=jmin; j<=jmax; j++){
+            if(!(i==posid1[0]&&j==posid1[1])){
+                if (is_within_band(i, j, posid1[0], posid1[1], posid2[0], posid2[1], xs, ys, gsize) == true){
+                    sp_id = j + gsize*i*1LL ;
+                    if ( is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) || is_in_obstacle(sp_id, T+1, ncells, D_all_mask_mat)){
+                        possible_collision = true;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    
+    return possible_collision;
+}
 
 
 
@@ -393,12 +461,13 @@ __device__ void extract_radiation(long long int sp_id, int32_t T, long long int 
 //test: changer from float* to float ac_angle
 __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int eff_chunk_size, long long int ncells, 
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
-                            float* D_all_s_mat,
+                            float* D_all_s_mat, int* D_all_mask_mat,
                             float ac_speed, float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, 
                             long long int* results){
                             // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
     int32_t gsize = params[0];          // size of grid along 1 direction. ASSUMING square grid.
-    int32_t nrzns = params[2];         
+    int32_t nrzns = params[2]; 
+    float r_outbound = params[5];        
     int32_t is_stationary = params[11];
     int32_t T = (int32_t)T_arr[0];      // current timestep
     int32_t idx = get_thread_idx();
@@ -425,18 +494,33 @@ __global__ void transition_calc(float* T_arr, int chunkNum, int chunk_size, int 
         float r=0;              // to store immediate reward
         float r_step;
 
+        
         extract_velocity(posids, sp_id, ncells, &vx, &vy, T, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi, params);
         extract_radiation(sp_id, T, ncells, D_all_s_mat, &rad1);
         
+        // if s1 not terminal
         if (is_terminal(posids[0], posids[1], params) == false){
-            // moves agent and adds r_outbound and r_terminal to r
-            move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
-            sp_id2 = get_sp_id_from_posid(posids, gsize);
-            extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
+            // if s1 not in obstacle
+            if (is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) == false){
 
-            // adds one step-reward based on method. mehthod is available in params
-            r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
-            r += r_step;
+                // moves agent and adds r_outbound and r_terminal to r
+                move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
+                sp_id2 = get_sp_id_from_posid(posids, gsize);
+                extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
+                
+                // adds one step-reward based on method. mehthod is available in params
+                r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
+                r += r_step;
+
+                // if S2 is an obstacle cell. then penalise with r_outbound
+                // if (is_in_obstacle(sp_id2, T+1, ncells, D_all_mask_mat) == true )
+                //     r = r_outbound;
+                if (goes_through_obstacle(sp_id, sp_id2, T, ncells, D_all_mask_mat, xs, ys, params) == true)
+                    r = r_outbound;
+            }
+            // if s1 is in obstacle, then no update to posid
+            else
+                r = r_outbound;
         }
   
 
@@ -606,7 +690,7 @@ std::string get_prob_name(int num_ac_speeds, int num_ac_angles, int i_term, int 
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                         float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                         float*  D_all_vi_arr, float*  D_all_yi_arr,
-                                        float* D_all_s_arr,
+                                        float* D_all_s_arr, int* D_all_mask_arr,
                                         thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                         thrust::device_vector<float> &D_ys,
                                         float** H_actions,
@@ -621,7 +705,7 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
 void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                 float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                 float*  D_all_vi_arr, float*  D_all_yi_arr,
-                                float* D_all_s_arr,
+                                float* D_all_s_arr, int* D_all_mask_arr,
                                 thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                 thrust::device_vector<float> &D_ys, 
                                 float** H_actions,
@@ -729,7 +813,7 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
             // launch kernel for @a @t
             transition_calc<<< DimGrid, DimBlock  >>> (D_T_arr, chunkNum, chunk_size, eff_chunk_size, 
                 ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                D_all_s_arr,
+                D_all_s_arr, D_all_mask_arr,
                 ac_speed, ac_angle, xs, ys, params, D_master_sumRsa_arr + n*eff_chunk_size, 
                 D_master_S2_arr + n*efCszNr);
 
@@ -1044,6 +1128,8 @@ int main(){
     std::string all_vi_fname = data_path + "all_vi_mat.npy";
     std::string all_yi_fname = data_path + "all_Yi.npy";
     std::string all_s_fname = data_path + "all_s_mat.npy";
+    std::string all_mask_fname = data_path + "obstacle_mask.npy"; //this file stored in int32
+
 
 
 
@@ -1059,7 +1145,7 @@ int main(){
     int all_vi_n_elms;
     int all_yi_n_elms;
     int all_s_n_elms;
-
+    int all_mask_n_elms;
 
     cnpy::NpyArray all_u_cnpy = read_velocity_field_data(all_u_fname, &all_u_n_elms);
     cnpy::NpyArray all_v_cnpy = read_velocity_field_data(all_v_fname, &all_v_n_elms);
@@ -1067,6 +1153,7 @@ int main(){
     cnpy::NpyArray all_vi_cnpy = read_velocity_field_data(all_vi_fname, &all_vi_n_elms);
     cnpy::NpyArray all_yi_cnpy = read_velocity_field_data(all_yi_fname, &all_yi_n_elms);
     cnpy::NpyArray all_s_cnpy = read_velocity_field_data(all_s_fname, &all_s_n_elms);
+    cnpy::NpyArray all_mask_cnpy = read_velocity_field_data(all_mask_fname, &all_mask_n_elms);
 
 
     float* all_u_mat = all_u_cnpy.data<float>();
@@ -1075,7 +1162,7 @@ int main(){
     float* all_vi_mat = all_vi_cnpy.data<float>();
     float* all_yi_mat = all_yi_cnpy.data<float>();
     float* all_s_mat = all_s_cnpy.data<float>();
-
+    int* all_mask_mat = all_mask_cnpy.data<int>();
 
     // print_array<float>(all_u_mat, all_u_n_elms, "all_u_mat", " ");
     // print_array<float>(all_ui_mat, all_ui_n_elms,"all_ui_mat", " ");
@@ -1147,6 +1234,7 @@ int main(){
     thrust::device_vector<float> D_all_vi_vec (all_vi_mat, all_vi_mat + all_vi_n_elms);
     thrust::device_vector<float> D_all_yi_vec (all_yi_mat, all_yi_mat + all_yi_n_elms);
     thrust::device_vector<float> D_all_s_vec (all_s_mat, all_s_mat + all_s_n_elms);
+    thrust::device_vector<int> D_all_mask_vec (all_mask_mat, all_mask_mat + all_mask_n_elms);
 
 
 
@@ -1156,6 +1244,7 @@ int main(){
     float* D_all_vi_arr = thrust::raw_pointer_cast(&D_all_vi_vec[0]);
     float* D_all_yi_arr = thrust::raw_pointer_cast(&D_all_yi_vec[0]);
     float* D_all_s_arr = thrust::raw_pointer_cast(&D_all_s_vec[0]);
+    int* D_all_mask_arr = thrust::raw_pointer_cast(&D_all_mask_vec[0]);
 
 
     std::cout << "Copied to Device : Velocity Field Data !" << std::endl;
@@ -1244,7 +1333,7 @@ int main(){
             // this function also concats coos across time.
             build_sparse_transition_model_at_T(t, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr 
                                                 ,D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                                                D_all_s_arr,
+                                                D_all_s_arr, D_all_mask_arr,
                                                 D_params, D_xs, D_ys, H_actions, D_master_vals,
                                                 H_coo_len_per_ac,
                                                 H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
