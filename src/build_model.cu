@@ -441,9 +441,9 @@ __device__ bool goes_through_obstacle(long long int sp_id1, long long int sp_id2
     for(int i=imin; i<=imax; i++){
         for(int j=jmin; j<=jmax; j++){
             if(!(i==posid1[0]&&j==posid1[1])){
-                if (is_within_band(i, j, posid1[0], posid1[1], posid2[0], posid2[1], xs, ys, gsize) == true){
-                    sp_id = j + gsize*i*1LL ;
-                    if ( is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) || is_in_obstacle(sp_id, T+1, ncells, D_all_mask_mat)){
+                sp_id = j + gsize*i*1LL ;
+                if ( is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) || is_in_obstacle(sp_id, T+1, ncells, D_all_mask_mat)){
+                    if (is_within_band(i, j, posid1[0], posid1[1], posid2[0], posid2[1], xs, ys, gsize) == true){
                         possible_collision = true;
                         return true;
                     }
