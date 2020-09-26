@@ -20,16 +20,15 @@ using namespace std::chrono;
 
 long long int GPUmem = 8*1000*1000*1000LL; // using 1000 instead of 1024 
 int nchunks = 1;
-int chunk_size;
-int last_chunk_size;
-int thrust_fraction = 1; //expected  memory use for thrust method calls in terms of fraction of master_arr size
-int avg_nnz_per_row = 10; // avg num  of nnz per row
+long long int chunk_size;
+long long int last_chunk_size;
 long long int ncells;
 long long int CszNrNa;  // abv for chunk_size*nrzns*num_actions
-long long int CszNr;    // abv for chunk_size*num_actions
-long long int CszNa;
+long long int CszNr;    
+long long int CszNa;    // abv for chunk_size*num_actions
 long long int NcNrNa;   // abv for ncells*nrzns*num_actions
-
+int thrust_fraction = 1; //expected  memory use for thrust method calls in terms of fraction of master_arr size
+int avg_nnz_per_row = 10; // avg num  of nnz per row
 
 /*
 ------  Declarations of utility functions from utils.h -------
@@ -694,7 +693,7 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
                                         thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                         thrust::device_vector<float> &D_ys,
                                         float** H_actions,
-                                        thrust::device_vector<long long int> &D_master_vals,
+                                        // thrust::device_vector<long long int> &D_master_vals,
                                         thrust::host_vector<int32_t> &H_coo_len_per_ac,
                                         thrust::host_vector<long long int>* H_Aarr_of_cooS1,
                                         thrust::host_vector<long long int>* H_Aarr_of_cooS2,
@@ -709,7 +708,7 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
                                 thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
                                 thrust::device_vector<float> &D_ys, 
                                 float** H_actions,
-                                thrust::device_vector<long long int> &D_master_vals,
+                                // thrust::device_vector<long long int> &D_master_vals,
                                 thrust::host_vector<int32_t> &H_coo_len_per_ac,
                                 thrust::host_vector<long long int>* H_Aarr_of_cooS1,
                                 thrust::host_vector<long long int>* H_Aarr_of_cooS2,
@@ -775,6 +774,13 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
     thrust::device_vector<long long int> D_master_S2_vector(efCszNrNa);
     long long int* D_master_S2_arr = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
 
+    thrust::host_vector<long long int> H_master_vals(efCszNrNa); //TODO: Chage name to H_master_sortVals
+    // thrust::host_vector<int32_t> temp_test(CszNrNa);
+    for (int i = 0; i < efCszNrNa; i++)
+        H_master_vals[i] = (i/nrzns);
+    thrust::device_vector<long long int> D_master_vals(efCszNrNa);
+    D_master_vals = H_master_vals;
+
     for (int chunkNum = 0; chunkNum < nchunks; chunkNum++){
         
         std::cout << "***   chunkNum = " << chunkNum << "\n";
@@ -787,6 +793,12 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
             // inside if to prevenent reeinitialisation costs at each chunknum. reinitiaise only at last chunknum
             thrust::device_vector<long long int> D_master_S2_vector(efCszNrNa);
             long long int* D_master_S2_arr = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
+            thrust::host_vector<long long int> H_master_vals(efCszNrNa); //TODO: Chage name to H_master_sortVals
+            // thrust::host_vector<int32_t> temp_test(CszNrNa);
+            for (int i = 0; i < efCszNrNa; i++)
+                H_master_vals[i] = (i/nrzns);
+            thrust::device_vector<long long int> D_master_vals(efCszNrNa);
+            D_master_vals = H_master_vals;
         }
            
         std::cout << "***   eff_chunk_size = " << eff_chunk_size << "\n";
@@ -992,9 +1004,9 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
 
 
 
-void get_cell_chunk_partition(int gsize, int ncells, int nrzns, int num_actions,
+void get_cell_chunk_partition(int gsize, int nrzns, int num_actions,
                 int nmodes, int nt, int thrust_fraction, int avg_nnz_per_row,
-                int* nchunks, int* chunk_size, int* last_chunk_size){
+                int* nchunks, long long int* chunk_size, long long int* last_chunk_size){
     // reads dimensions of input data related to the problem and returns sizes
     // and number of chunks into which ncells (spatial grid) is divided.
     // So as to be able to fit all necesarry data structures in GPU memory
@@ -1101,7 +1113,6 @@ int main(){
     if (nrzns >= 1000)
     bDimx = 1000;
  
-    // float z = -9999;
     int reward_type = get_reward_type(prob_type);
     std::cout << "Reward type: " << reward_type << "\n";
 
@@ -1119,7 +1130,7 @@ int main(){
     fout << op_FnamePfx;
     fout.close();
 
-    // TODO: 1. read paths form file
+    // TODO: 1. read paths form file xx DONE
     //       2. Make sure files are stored in np.float32 format
     std::string data_path = "data_input/" + prob_name + "/";
     std::string all_u_fname = data_path + "all_u_mat.npy";
@@ -1129,7 +1140,6 @@ int main(){
     std::string all_yi_fname = data_path + "all_Yi.npy";
     std::string all_s_fname = data_path + "all_s_mat.npy";
     std::string all_mask_fname = data_path + "obstacle_mask.npy"; //this file stored in int32
-
 
 
 
@@ -1209,8 +1219,6 @@ int main(){
     define_xs_or_ys(ys, dy, y0, gsize);
 
     // define angles in host
-    // thrust::host_vector<float> H_ac_angles(num_actions);
-    // float* ac_angles = thrust::raw_pointer_cast(&H_ac_angles[0]);
     float** H_actions = new float*[num_actions];
     for(int i=0; i<num_actions; i++)
         H_actions[i] = new float[2];
@@ -1235,7 +1243,6 @@ int main(){
     thrust::device_vector<float> D_all_yi_vec (all_yi_mat, all_yi_mat + all_yi_n_elms);
     thrust::device_vector<float> D_all_s_vec (all_s_mat, all_s_mat + all_s_n_elms);
     thrust::device_vector<int> D_all_mask_vec (all_mask_mat, all_mask_mat + all_mask_n_elms);
-
 
 
     float* D_all_u_arr = thrust::raw_pointer_cast(&D_all_u_vec[0]);
@@ -1275,27 +1282,28 @@ int main(){
         H_Aarr_of_Rs[i] = thrust::host_vector<float> (0);
     }
 
-    ncells = gsize*gsize;                 // assign value to global variable
-    chunk_size = ncells;                  // assgin default value to global varibale
+    ncells = gsize*gsize;           // assign value to global variable
+    chunk_size = ncells;            // assgin default value to global varibale
     last_chunk_size = ncells;
-    get_cell_chunk_partition(gsize, ncells, nrzns, num_actions,
+    get_cell_chunk_partition(gsize, nrzns, num_actions,
         nmodes, nt, thrust_fraction, avg_nnz_per_row, &nchunks, &chunk_size, &last_chunk_size);
  
     CszNr = chunk_size * nrzns;
     CszNa = chunk_size * num_actions;
     CszNrNa = chunk_size * nrzns * num_actions * 1LL;
     std::cout << "CszNrNa = " << CszNrNa << "\n";
+    assert( (chunk_size * (nchunks - 1)) + last_chunk_size == ncells );
 
     
     //initialise master_value_vector for sort_by_key
-    thrust::host_vector<long long int> H_master_vals(CszNrNa); //TODO: Chage name to H_mastera_sortVals
-    // thrust::host_vector<int32_t> temp_test(CszNrNa);
+            // thrust::host_vector<long long int> H_master_vals(CszNrNa); //TODO: Chage name to H_master_sortVals
+            // // thrust::host_vector<int32_t> temp_test(CszNrNa);
 
 
-    for (int i = 0; i < CszNrNa; i++)
-        H_master_vals[i] = (i/nrzns);
-    thrust::device_vector<long long int> D_master_vals(CszNrNa);
-    D_master_vals = H_master_vals;
+            // for (int i = 0; i < CszNrNa; i++)
+            //     H_master_vals[i] = (i/nrzns);
+            // thrust::device_vector<long long int> D_master_vals(CszNrNa);
+            // D_master_vals = H_master_vals;
 
     // temp_test = D_master_vals;
     // std::cout << "temp_test\n" ;
@@ -1334,7 +1342,8 @@ int main(){
             build_sparse_transition_model_at_T(t, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr 
                                                 ,D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
                                                 D_all_s_arr, D_all_mask_arr,
-                                                D_params, D_xs, D_ys, H_actions, D_master_vals,
+                                                D_params, D_xs, D_ys, H_actions, 
+                                                // D_master_vals,
                                                 H_coo_len_per_ac,
                                                 H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
                                                 H_Aarr_of_Rs);

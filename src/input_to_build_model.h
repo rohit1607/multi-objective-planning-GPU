@@ -1,21 +1,21 @@
 //Prob type: time, energy1, energy2, energy3
-std::string prob_type = "energy2"; //verify num_ac_speeds 
-std::string prob_name = "all_jet_rot1_g10x10x10_r5";
+std::string prob_type = "time"; //verify num_ac_speeds 
+std::string prob_name = "test_g100x100x10_r5k";
 
 int32_t nt = 10;
 float dt = 1;
-int32_t gsize = 10;
+int32_t gsize = 100;
 float dx = 1; float dy = 1;
 
 float x0 = dx/2;
 float y0 = dy/2;
 
 float F = 1;
-int num_ac_speeds = 2; //verify prob_type
+int num_ac_speeds = 1; //verify prob_type
 int num_ac_angles = 8;
 int32_t num_actions = num_ac_speeds*num_ac_angles;
 
-int32_t nrzns = 5;     // verify with probname
+int32_t nrzns = 5000;     // verify with probname
 int32_t bDimx = nrzns;
 
 float r_outbound = -100;
