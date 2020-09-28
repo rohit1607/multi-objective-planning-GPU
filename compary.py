@@ -44,6 +44,7 @@ def compare(np1, np2):
 
 
 
+
 def verbose_compare(np1, np2, rng_st, rng_end, nprints=None):
     print(len(np1) ,len(np2))
     min_len = np.min([len(np1) ,len(np2)])
@@ -135,5 +136,5 @@ compare(S2_f1, S2_f2)
 compare(V_f1, V_f2)
 compare(R_f1, R_f2)
 
-verbose_compare(S1_f1, S1_f2, 22719, 23000)
-check_consecutive_pairs(S1_f2)
+# verbose_compare(S1_f1, S1_f2, 22719, 23000)
+# check_consecutive_pairs(S1_f2)
