@@ -5,7 +5,7 @@ from os.path import join
 from utils.custom_functions import extract_velocity, get_angle_in_0_2pi
 import matplotlib.pyplot as plt
 import math
-
+import imageio
 
 # plot function
 def action_to_quiver(a):
@@ -236,20 +236,9 @@ def get_action_from_policy1d(policy_1d, state_tuple, g):
         
 
 
-def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_field_data, fpath,
-                                fname='Trajectories', 
-                                with_policy_interp = False,
-                                show_grid_policy = False, 
-                                show_interp_policy_of_traj = False,
-                                show_field_at_t_r = None,
-                                show_scalar_field_at_t_r = None):
+def setup_grid_in_plot(fig, ax, g):
 
-    # time calculation and state trajectory
     msize = 15
-    # fsize = 3
-
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.add_subplot(1, 1, 1)
     ax.set_xlim(0,g.xs[-1] + (dx/2))
     ax.set_ylim(0,g.ys[-1] + (dy/2))
 
@@ -279,65 +268,137 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
 
     plt.gca().set_aspect('equal', adjustable='box')
 
-    # plot obstacle
-    obs_mask_mat = scalar_field_data[1]
-    temp_t = 0
+    return
+
+def get_xy_from_ij(i,j,g):
+    x = g.xs[j]
+    y = g.ys[g.ni - 1 - i]
+    return x,y
+
+def get_xy_list(g, gsize):
+    x_list=[]
+    y_list=[]
     for i in range(gsize):
         for j in range(gsize):
-            if obs_mask_mat[temp_t,i,j] == 1:
-                x_corners, y_corners = get_general_square_corners(g, (temp_t,i,j))
+            x, y = get_xy_from_ij(i,j,g)
+            x_list.append(x)
+            y_list.append(y)
+    return (x_list, y_list)
+
+
+def func_show_grid_policy(t, policy_1d, g, gsize, xy_list=None):
+    if xy_list==None:
+        x_list=[]
+        y_list=[]
+    else:
+        x_list, y_list = xy_list
+    ax_list=[]
+    ay_list=[]
+    for i in range(gsize):
+        for j in range(gsize):
+            a = get_action_from_policy1d(policy_1d, (t,i,j), g)
+            if xy_list==None:
+                x, y = get_xy_from_ij(i,j,g)
+                x_list.append(x)
+                y_list.append(y)
+            a_x, a_y = action_to_quiver(a)
+            ax_list.append(a_x)
+            ay_list.append(a_y)
+    return x_list, y_list, ax_list, ay_list
+
+
+def func_show_velocity_field(t_r, vel_field_data, g, gsize, xy_list=None):
+    if xy_list==None:
+        x_list=[]
+        y_list=[]
+    else:
+        x_list, y_list = xy_list
+    vx_list = []
+    vy_list = []
+    t, r = t_r
+    for i in range(gsize):
+        for j in range(gsize):
+            if xy_list == None:
+                x, y = get_xy_from_ij(i,j,g)
+                x_list.append(x)
+                y_list.append(y)
+            vx, vy = extract_velocity(vel_field_data, t, i, j, r)
+            vx_list.append(vx)
+            vy_list.append(vy)
+    return x_list, y_list, vx_list, vy_list
+
+
+def func_show_scalar_field(t_r, scalar_field_data, g, gsize, xy_list=None):
+    if xy_list==None:
+        x_list=[]
+        y_list=[]
+    else:
+        x_list, y_list = xy_list
+    s_list = []
+    all_s_mat = scalar_field_data[0]
+    t,_ = t_r
+    for i in range(gsize):
+        for j in range(gsize):
+            if xy_list == None:
+                x, y = get_xy_from_ij(i,j,g)
+                x_list.append(x)
+                y_list.append(y)
+            s = all_s_mat[t,i,j]
+            s_list.append(s)
+    s_arr = np.array(s_list)
+    s_arr = s_arr.reshape((gsize, gsize))
+    print("check shapes: ", X.shape, Y.shape, s_arr.shape)
+    return s_arr
+
+def func_show_obstacles(t, obs_mask_mat, g, gsize):
+    for i in range(gsize):
+        for j in range(gsize):
+            if obs_mask_mat[t,i,j] == 1:
+                x_corners, y_corners = get_general_square_corners(g, (t,i,j))
                 plt.fill(x_corners, y_corners, 'k', alpha = 0.5, zorder = -1e2)
+    return
+
+
+def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_field_data, fpath,
+                                fname='Trajectories', 
+                                with_policy_interp = False,
+                                show_grid_policy = False, 
+                                show_interp_policy_of_traj = False,
+                                show_field_at_t_r = None,
+                                show_scalar_field_at_t_r = None):
+
+    # time calculation and state trajectory
+    # fsize = 3
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(1, 1, 1)
+    setup_grid_in_plot(fig, ax, g)
+
+    # plot obstacle
+    obs_mask_mat = scalar_field_data[1]
+    t = 0
+    func_show_obstacles(t, obs_mask_mat, g, gsize)
+ 
+    # get x_list and y_list of cells in grid
+    xy_list = get_xy_list(g, gsize)
+    x_list, y_list = xy_list
 
     # Also plots policy on grid
     if show_grid_policy == True:
-        xtr=[]
-        ytr=[]
-        ax_list=[]
-        ay_list=[]
-        t = 0
-        for i in range(gsize):
-            for j in range(gsize):
-                a = get_action_from_policy1d(policy_1d, (t,i,j), g)
-                xtr.append(g.xs[j])
-                ytr.append(g.ys[g.ni - 1 - i])
-                a_x, a_y = action_to_quiver(a)
-                ax_list.append(a_x)
-                ay_list.append(a_y)
-
-        plt.quiver(xtr, ytr, ax_list, ay_list, alpha = 0.5, color = 'b')
+        t=0
+        _,_,ax_list, ay_list = func_show_grid_policy(t, policy_1d, g, gsize, xy_list=xy_list)
+        plt.quiver(x_list, y_list, ax_list, ay_list, alpha = 0.5, color = 'b')
 
     # Also plots velocity field 
     if show_field_at_t_r != None:
-        xtr = []
-        ytr = []
-        vx_list = []
-        vy_list = []
-        t,r = show_field_at_t_r
-        for i in range(gsize):
-            for j in range(gsize):
-                xtr.append(g.xs[j])
-                ytr.append(g.ys[g.ni - 1 - i])
-                vx, vy = extract_velocity(vel_field_data, t, i, j, r)
-                vx_list.append(vx)
-                vy_list.append(vy)
-        plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5)
+        t_r = show_field_at_t_r
+        _,_,vx_list, vy_list = func_show_velocity_field(t_r, vel_field_data, g, gsize, xy_list=xy_list)
+        plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
 
     # Also plots scalar field
     if show_scalar_field_at_t_r != None:
-        xtr=[]
-        ytr=[]
-        s_list = []
-        all_s_mat = scalar_field_data[0]
-        t,r = show_field_at_t_r
-        for i in range(gsize):
-            for j in range(gsize):
-                xtr.append(g.xs[j])
-                ytr.append(g.ys[g.ni - 1 - i])
-                s = all_s_mat[t,i,j]
-                s_list.append(s)
-        s_arr = np.array(s_list)
-        s_arr = s_arr.reshape((gsize, gsize))
-        print("check shapes: ", X.shape, Y.shape, s_arr.shape)
+        t_r = 0,0
+        s_arr = func_show_scalar_field(t_r, scalar_field_data, g, gsize, xy_list=xy_list)
         plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
 
 
@@ -445,105 +506,8 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
 
 
 
-
-def plot_learned_policy(g, policy_1d, vel_field_data, scalar_field_data,
-                         fpath, fname='Trajectories',
-                         check_interp_at_intermed_points = False, 
-                         show_field_at_t_r = None,
-                         show_scalar_field_at_t_r = None):
-    """
-    Plots learned policy
-    :param g: grid object
-    :param show_field_at_t_r: None or tuple (t,r) 
-    :param show_scalar_field_at_t_r: None or tuple (t,r_sc); r_sc is rzn for scalar field
-    :param QL_params: [policy, Q, init_Q, label_data, filepath]  - details mentioned below
-    :param showfig: whether you want to see fig during execution
-    :return:
-    """
-    print("plot_policy: making policy plot")
-    msize = 15
-
-    # set grid
-
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.set_xlim(0,g.xs[-1] + (dx/2))
-    ax.set_ylim(0,g.ys[-1] + (dy/2))
-
-    minor_ticks = [i*g.dx/1 for i in range(gsize + 1)]
-    major_ticks = [i*g.dx/1 for i in range(0, gsize + 1)]
-
-    ax.set_xticks(minor_ticks, minor=True)
-    ax.set_xticks(major_ticks, minor=False)
-    ax.set_yticks(major_ticks, minor=False)
-    ax.set_yticks(minor_ticks, minor=True)
-
-    ax.grid(b= True, which='both', color='#CCCCCC', axis='both',linestyle = '-', alpha = 0.5)
-    ax.tick_params(axis='both', which='both', labelsize=6)
-
-    ax.set_xlabel('X (Non-Dim)')
-    ax.set_ylabel('Y (Non-Dim)')
-
-    st_point= g.start_state
-    plt.scatter(g.xs[st_point[2]], g.ys[g.ni - 1 - st_point[1]], marker = 'o', s = msize, color = 'k', zorder = 1e5)
-    x_ssg, y_ssg =  get_sg_square_corners(g, 'start')
-    plt.fill(x_ssg, y_ssg, 'g', alpha = 0.5, zorder = 0)
-    if (0<= g.endpos[0] < gsize) and (0<= g.endpos[1] < gsize):
-        plt.scatter(g.xs[g.endpos[1]], g.ys[g.ni - 1 - g.endpos[0]], marker = '*', s = msize*2, color ='k', zorder = 1e5)
-        x_tsg, y_tsg =  get_sg_square_corners(g, 'target')
-        plt.fill(x_tsg, y_tsg, 'r', alpha = 0.5, zorder = 0)
-    plt.gca().set_aspect('equal', adjustable='box')
-
-    xtr=[]
-    ytr=[]
-    ax_list=[]
-    ay_list=[]
-    vx_list=[]
-    vy_list=[]
-
-    t = 0
-    for i in range(gsize):
-        for j in range(gsize):
-            a = get_action_from_policy1d(policy_1d, (t,i,j), g)
-            xtr.append(g.xs[j])
-            ytr.append(g.ys[g.ni - 1 - i])
-            a_x, a_y = action_to_quiver(a)
-            ax_list.append(a_x)
-            ay_list.append(a_y)
-
-    # plt.quiver(xtr, ytr, ax_list, ay_list, scale_units = 'x', scale =1)
-    plt.quiver(xtr, ytr, ax_list, ay_list)
-    
-
-
-    if show_field_at_t_r != None:
-        t,r = show_field_at_t_r
-        for i in range(gsize):
-            for j in range(gsize):
-                vx, vy = extract_velocity(vel_field_data, t, i, j, r)
-                vx_list.append(vx)
-                vy_list.append(vy)
-        plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5)
-        # plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5, scale_units = 'x', scale =1)
-
-    if show_scalar_field_at_t_r != None:
-        s_list = []
-        all_s_mat = scalar_field_data[0]
-        t,r = show_field_at_t_r
-        for i in range(gsize):
-            for j in range(gsize):
-                s = all_s_mat[t,i,j]
-                s_list.append(s)
-        s_arr = np.array(s_list)
-        s_arr = s_arr.reshape((gsize, gsize))
-        print("check shapes: ", X.shape, Y.shape, s_arr.shape)
-        plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
-        # plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5, scale_units = 'x', scale =1)
-    
-
-    if check_interp_at_intermed_points:
+def func_check_interp_at_intermediate_points(t, policy_1d, g, gsize):
         print("plot_policy: making interpolated policy plot")
-        t = 0
         x_list = []
         y_list = []
         ax_list = []
@@ -569,19 +533,108 @@ def plot_learned_policy(g, policy_1d, vel_field_data, scalar_field_data,
                         ay_list.append(a_y)
                         x_list.append(x)
                         y_list.append(y)
+        return x_list, y_list, ax_list, ay_list
 
-        # print("check ax_list, ay_lsit")
-        # print("lens", len(ax_list), len(ay_list), len(x_list), len(y_list))
-        # for i in range(len(ax_list)): 
-        #     try:
-        #         print(i, ax_list[i][0],"\t", ay_list[i][0])
-        #     except:
-        #         print(i, ax_list[i], ay_list[i])
+
+def plot_learned_policy(g, policy_1d, vel_field_data, scalar_field_data,
+                         fpath, fname='Trajectories',
+                         check_interp_at_intermed_points = False, 
+                         show_field_at_t_r = None,
+                         show_scalar_field_at_t_r = None):
+    """
+    Plots learned policy
+    :param g: grid object
+    :param show_field_at_t_r: None or tuple (t,r) 
+    :param show_scalar_field_at_t_r: None or tuple (t,r_sc); r_sc is rzn for scalar field
+    :param QL_params: [policy, Q, init_Q, label_data, filepath]  - details mentioned below
+    :param showfig: whether you want to see fig during execution
+    :return:
+    """
+    print("plot_policy: making policy plot")
+    # set grid
+    # obs_mask_mat = scalar_field_data[1]
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(1, 1, 1)
+    setup_grid_in_plot(fig, ax, g)
+
+    xy_list = get_xy_list(g, gsize)
+    x_list, y_list = xy_list
+  
+    t=0
+    _,_,ax_list, ay_list = func_show_grid_policy(t, policy_1d, g, gsize, xy_list=xy_list)
+    plt.quiver(x_list, y_list, ax_list, ay_list)
+    
+    if show_field_at_t_r != None:
+        t_r = show_field_at_t_r
+        _,_,vx_list, vy_list = func_show_velocity_field(t_r, vel_field_data, g, gsize, xy_list=xy_list)
+        plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
+        # plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5, scale_units = 'x', scale =1)
+
+    if show_scalar_field_at_t_r != None:
+        t_r = 0,0
+        s_arr = func_show_scalar_field(t_r, scalar_field_data, g, gsize, xy_list=xy_list)
+        plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
+        # plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5, scale_units = 'x', scale =1)
+    
+
+    if check_interp_at_intermed_points:
+        func_check_interp_at_intermediate_points(t, policy_1d, g, gsize)
         # plt.quiver(x_list, y_list, ax_list, ay_list, scale_units = 'x', scale =1, alpha = 0.5, color ='b') 
         plt.quiver(x_list, y_list, ax_list, ay_list, alpha = 0.5, color ='b') 
 
     if fname != None:
         plt.savefig(join(fpath, fname),bbox_inches = "tight", dpi=600)
+
+    return
+
+
+def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d, 
+                            vel_field_data, scalar_field_data,
+                            fpath, fname='Trajectories'):
+
+
+    xy_list = get_xy_list(g, gsize)
+    x_list, y_list = xy_list
+
+    rzn_list = [i for i in range(nrzns)]
+    images = []
+    for t in range(nt):
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(1, 1, 1)
+        setup_grid_in_plot(fig, ax, g)
+
+        obs_mask_mat = scalar_field_data[1]
+        func_show_obstacles(t, obs_mask_mat, g, gsize)    
+
+        _,_,vx_list, vy_list = func_show_velocity_field((t,0), vel_field_data, g, gsize, xy_list=xy_list)
+        plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
+        # plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5, scale_units = 'x', scale =1)
+
+        s_arr = func_show_scalar_field((t,0), scalar_field_data, g, gsize, xy_list=xy_list)
+        plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
+
+
+        for k in rzn_list:
+            xtr, ytr = traj_list[k]
+            try:
+                plt.plot(xtr[0:t+1], ytr[0:t+1])
+                plt.scatter(xtr[0:t], ytr[0:t], s=10)
+                plt.scatter(xtr[t], ytr[t], color = 'k', marker = '^', s = 20)
+            except:
+                pass
+
+        filename = join(fpath, fname)
+        plt.savefig(filename, dp = 100)
+        plt.clf()
+        plt.close()
+        images.append(imageio.imread(filename+".png"))
+
+    imageio.mimsave(join(fpath,'movie.gif'), images, duration = 1.5)
+
+    return
+    
+
 
 
 def get_refd_startpos_list(startpos, tsgsize):
