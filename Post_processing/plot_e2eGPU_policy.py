@@ -625,7 +625,7 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
                 pass
 
         filename = join(fpath, fname)
-        plt.savefig(filename, dp = 100)
+        plt.savefig(filename, dp = 50)
         plt.clf()
         plt.close()
         images.append(imageio.imread(filename+".png"))
@@ -682,7 +682,7 @@ if __name__ == "__main__":
     dt = params[4]
     F = params[3]
     endpos = (int(params[8]),int(params[9])) 
-    startpos = (8,1) # (8,14) #
+    startpos = (30,35) # (8,14) #
 
     print("CHECK PARAMS")
     print("gsize =", gsize)
@@ -698,20 +698,7 @@ if __name__ == "__main__":
     print("endpos= ", endpos)
     print("startpos= ", startpos)
 
-    # gsize = 10
-    # dx = 1
-    # dy = 1
-    # tsgsize = 1
-    # nt = 10
-    # nrzns = 5
-    # num_ac_speeds = 1
-    # num_ac_angles = 8
-    # dt = 1
-    # F = 1
-    # startpos = (7,1) #(14,2) #
-    # endpos = (4,7) # (8,14) #
-    # startpos = (160,20) #(80,10)
-    # endpos = (100,180) #(50,90)
+
 
     num_actions = num_ac_speeds * num_ac_angles
 
@@ -772,14 +759,29 @@ if __name__ == "__main__":
         t_sp_list.append(t_list_reached[0])
         np.save(join(fpath,'traj_list'), traj_list)
         # print("NO Interp: first succ EAT = ", t_list_reached[0])
-        t_list_all, t_list_reached, bad_count_tuple, traj_list = interp_t_data
+        t_list_all, t_list_reached, bad_count_tuple, interp_traj_list = interp_t_data
         interp_t_sp_list.append(t_list_reached[0])
-        np.save(join(fpath,'traj_list_wip'), traj_list)
+        np.save(join(fpath,'traj_list_wip'), interp_traj_list)
 
         # print("With Interp: first succ EAT = ", t_list_reached[0])
 
     print("No interpol: ", t_sp_list, "\navg=", np.mean(t_sp_list))
     print("WITH interpol: ", interp_t_sp_list, "\navg=", np.mean(interp_t_sp_list))
+    
+    dynamic_plot_sequence_and_gif(traj_list, g, policy_1d, 
+                            vel_field_data, scalar_field_data,
+                            fpath, fname='Trajectories')
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     # verbose_compare_trajs(traj1, traj2)
 
     # print(policy[])

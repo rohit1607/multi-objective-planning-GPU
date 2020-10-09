@@ -195,7 +195,7 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
     int method = params[13];
     float Cr = 1;       // coeffecient for radaition term
     float Cf = 1;       // coeffecient for energy consumtion
-    float Ct = 0.001;   // small coeffecient for time for to prevent lazy start
+    float Ct = 0.01;   // small coeffecient for time for to prevent lazy start
     float dt = params[4];
 
     if (method == 0)    //time
