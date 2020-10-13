@@ -2,7 +2,7 @@ import numpy as np
 from math import cos, sin, pi
 import matplotlib.pyplot as plt
 import imageio
-
+from scipy.interpolate import griddata
 def extract_velocity(vel_field_data, t, i, j, rzn):
     # all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi = vel_field_data
     #    0          1           2           3           4
@@ -20,7 +20,7 @@ def extract_velocity(vel_field_data, t, i, j, rzn):
 
 class DG_scalar_field:
 
-    def __init__(self, gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_range):
+    def __init__(self, gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_range, interpolate_degree=1):
         self.gsize = gsize
         self.n = gsize*gsize
         self.nt = nt
@@ -31,9 +31,13 @@ class DG_scalar_field:
         self.A = A
         self.w_range = w_range
         self.dxy = dxy
-        self.xs = [(0.5 + i)*dxy for i in range(gsize)]
-        self.ys = [(0.5 + i)*dxy for i in range(gsize)]
+        self.xs = self.get_xs_ys(dxy)
+        self.ys = self.get_xs_ys(dxy)
         self.ts = [i*dt for i in range(nt)]
+        self.interpolate_degree = interpolate_degree
+
+    def get_xs_ys(self,dxy):
+        return [(0.5 + i)*dxy for i in range(self.gsize)]
 
     def f(self , x, t):
         w = pi/2
@@ -44,7 +48,7 @@ class DG_scalar_field:
         return  term1 + term2 
 
     def phi(self, x, y, t):
-        return self.A*(1+ sin(4*pi*self.f(x,t))*sin(4*pi*y)*sin(2*pi*t/20))
+        return self.A*(1+ sin(0.5*pi*self.f(x,t))*sin(0.5*pi*y)*sin(2*pi*t/20))
 
     def sample_w(self, k):
         w_i, w_f = self.w_range
@@ -82,7 +86,7 @@ class DG_scalar_field:
 
 class DG_velocity_field:
 
-    def __init__(self, gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_range):
+    def __init__(self, gsize, nt, dt, dxy, A, eps, wx, wy, op_nrzns, n_wsamples, w_range, interpolate_degree=1):
         self.gsize = gsize
         self.n = gsize*gsize 
         self.nt = nt
@@ -93,9 +97,16 @@ class DG_velocity_field:
         self.A = A
         self.w_range = w_range
         self.dxy = dxy
-        self.xs = [(0.5 + i)*dxy for i in range(gsize)]
-        self.ys = [(0.5 + i)*dxy for i in range(gsize)]
+        self.xs = self.get_xs_ys(dxy, gsize)
+        self.ys = self.get_xs_ys(dxy, gsize)
         self.ts = [i*dt for i in range(nt)]
+        self.interpolate_degree = interpolate_degree
+        self.xgrid, self.ygrid = np.meshgrid(self.xs, np.flip(self.ys))
+        self.wy = wy
+        self.wx = wx
+
+    def get_xs_ys(self, dxy, size):
+        return [(0.5 + i)*dxy for i in range(size)]
         
     def f(self , x, t, w):
         term1 = self.eps * sin(w*t) * (x**2)
@@ -107,13 +118,13 @@ class DG_velocity_field:
         return fx
 
     def phi(self, x, y, t, w):
-        return self.A*sin(pi*self.f(x,t,w))*sin(2*pi*y)
+        return self.A*sin(pi*self.f(x,t,w))*sin(self.wy*y)
 
     def vx_vy(self, x, y, t, w):
         fx = self.fx(x,t,w)
         f = self.f(x,t,w)
-        vx = -( self.A * pi * sin(pi*f) * 2*cos(2*pi*y) )
-        vy = self.A * pi * sin(pi*y) * fx * cos(pi*f)
+        vx = -( self.A * pi * sin(self.wx*f) * cos(self.wy *y) )
+        vy = self.A * pi * sin(self.wy * y) * fx * cos(self.wx*f)
         return vx, vy
 
     def sample_w(self, k):
@@ -137,7 +148,7 @@ class DG_velocity_field:
         assert(R_vx.shape == (self.nt, self.n_wsamples, self.n))
         
         for tid in range(self.nt):
-            print(tid, " .. ", end=' ')
+            print("tid = ", tid)
             t = self.ts[tid]
             for k in range(self.n_wsamples):
                 w = self.sample_w(k)
@@ -161,7 +172,8 @@ class DG_velocity_field:
         vmax_sq = np.max(R_vsq)
         max_vels = [vx_sq_max**0.5, vy_sq_max**0.5, vmax_sq**0.5]
         min_vels = [np.min(R_vx_sq)**0.5, np.min(R_vy_sq)**0.5, np.min(R_vsq)**0.5]
-        return max_vels, min_vels
+        mean_vels = [np.mean(R_vx_sq)**0.5, np.mean(R_vy_sq)**0.5, np.mean(R_vsq)**0.5]
+        return max_vels, min_vels, mean_vels
 
     def rank_reduction(self, u, s, vh, n_modes):
         u1 = u[:, 0:n_modes]
@@ -222,6 +234,44 @@ class DG_velocity_field:
                 all_ui_mat[tid,m,:,:] = np.reshape(M[tid,m,0:n],(g,g))
                 all_vi_mat[tid,m,:,:] = np.reshape(M[tid,m,n:2*n],(g,g))
         return [all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi_mat]
+
+    def interpolate_data_t(self, field_data):
+        d = self.interpolate_degree
+        new_size = d*self.gsize 
+        new_dxy = self.dxy/d
+        new_xs = self.get_xs_ys(new_dxy, new_size)
+        new_ys = self.get_xs_ys(new_dxy, new_size)
+        # print("lenghts ",len(new_xs), len(self.xs))
+        assert(len(new_xs) == d * len(self.xs))
+        new_xgrid, new_ygrid = np.meshgrid(new_xs, np.flip(new_ys))
+        x=self.xgrid.flatten()
+        y=self.ygrid.flatten()
+        # print("new_xgrid.shape: ",new_xgrid.shape)
+        points = np.empty((len(x),2))
+        points[:,0] =x
+        points[:,1] =y
+        assert(points.shape == (self.gsize*self.gsize, 2))
+        new_field_data = griddata(points, field_data.flatten(), (new_xgrid, new_ygrid), method='linear')
+        # print("new_field_data.shape= ",new_field_data.shape)
+        return new_field_data
+
+    def interpolate_data_to_refined_grid(self, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, n_modes):
+        d = self.interpolate_degree
+        new_all_u_mat = np.empty((self.nt, d*self.gsize, d*self.gsize), dtype = np.float32)
+        new_all_v_mat = np.empty_like(new_all_u_mat, dtype = np.float32)
+        # modes
+        new_all_ui_mat = np.empty((self.nt, n_modes, d*self.gsize, d*self.gsize),dtype = np.float32)
+        new_all_vi_mat = np.empty_like(new_all_ui_mat, dtype = np.float32)
+
+        for tid in range(self.nt):
+            new_all_u_mat[tid,:,:] = self.interpolate_data_t(all_u_mat[tid,:,:])
+            new_all_v_mat[tid,:,:] = self.interpolate_data_t(all_v_mat[tid,:,:])
+            for m in range(n_modes):
+                new_all_ui_mat[tid,m,:,:] = self.interpolate_data_t(all_ui_mat[tid,m,:,:])
+                new_all_vi_mat[tid,m,:,:] = self.interpolate_data_t(all_vi_mat[tid,m,:,:])
+        return [new_all_u_mat, new_all_v_mat, new_all_ui_mat, new_all_vi_mat]
+
+
 
 
 
@@ -325,40 +375,56 @@ def plot_modes_of_rank_reduced_field(dg, t, n_modes):
     
 
 
-gsize = 50
+init_gsize = 50
 nt = 50
 dt = 10/nt
-dxy = 2/gsize
-A = 0.1
+dxy = 2/init_gsize
+A = 0.5
 eps = 0.1
 op_nrzns = 10
 n_wsamples = 100
 w_range = ( pi/10, 8*pi/10 )
+wy = 0.5*pi
+wx = pi
+# interpolates 
+interpolate_degree = 1
+final_gsize = init_gsize*interpolate_degree
 
-n_modes = 4
+
+n_modes = 3
 print("initialising objects")
-dg1 = DG_velocity_field(gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_range)
-cloud = DG_scalar_field(gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_range)
+dg1 = DG_velocity_field(init_gsize, nt, dt, dxy, A, eps, wx, wy, op_nrzns, n_wsamples, w_range, interpolate_degree)
+cloud = DG_scalar_field(final_gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_range)
 
 print("Generating realisations")
 R_vx, R_vy, _ = dg1.generate_R()
-# max_vels, min_vels = dg1.find_max_vels(R_vx, R_vy)
-# print("max_vels= ", max_vels)
-# print("min_vels", min_vels)
+max_vels, min_vels, mean_vels = dg1.find_max_vels(R_vx, R_vy)
+print("max_vels= ", max_vels)
+print("min_vels", min_vels)
+print("mean_vels", mean_vels)
 # print()
 
 print("Computing modes and coeffs")
 C, M, _, R_mean = dg1.compute_modes_and_coeffs(n_modes)
 
+
+# test_rank_reduced_field(dg1,1,0,n_modes)
+
 print("Reshaping matrices for grid")
-vel_field_data = dg1.reshape_matrices_for_square_grid(C, M, R_mean, n_modes)
+init_vel_field_data = dg1.reshape_matrices_for_square_grid(C, M, R_mean, n_modes)
+
+print("Interpolating")
+all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi_mat = init_vel_field_data
+vel_field_data = dg1.interpolate_data_to_refined_grid(all_u_mat, all_v_mat, all_ui_mat, all_vi_mat,n_modes)
+vel_field_data.append(all_Yi_mat)
+print()
 
 print("generating scalar field")
 all_s_mat = cloud.generate_phi()
-assert(all_s_mat.shape == (nt,gsize,gsize))
+assert(all_s_mat.shape == (nt,final_gsize,final_gsize))
 # print(C.shape, M.shape, R_mean.shape)
 
-obstacle_mask = np.zeros((nt, gsize, gsize), dtype = np.int32)
+obstacle_mask = np.zeros((nt, final_gsize, final_gsize), dtype = np.int32)
 scalar_field_data = [all_s_mat, obstacle_mask]
 files = ["all_u_mat.npy", "all_v_mat.npy", "all_ui_mat.npy", "all_vi_mat.npy", "all_Yi.npy"]
 scalar_files = ["all_s_mat.npy", "obstacle_mask.npy"]

@@ -44,7 +44,7 @@ class DG_scalar_field:
         return  term1 + term2 
 
     def phi(self, x, y, t):
-        return self.A*(1+ sin(4*pi*self.f(x,t))*sin(4*pi*y)*sin(2*pi*t/20))
+        return self.A*(1+ sin(2*pi*self.f(x,t))*sin(2*pi*y)*sin(2*pi*t/20))
 
     def sample_w(self, k):
         w_i, w_f = self.w_range
@@ -107,12 +107,12 @@ class DG_velocity_field:
         return fx
 
     def phi(self, x, y, t, w):
-        return self.A*sin(pi*self.f(x,t,w))*sin(2*pi*y)
+        return self.A*sin(pi*self.f(x,t,w))*sin(pi*y)
 
     def vx_vy(self, x, y, t, w):
         fx = self.fx(x,t,w)
         f = self.f(x,t,w)
-        vx = -( self.A * pi * sin(pi*f) * 2*cos(2*pi*y) )
+        vx = -( self.A * pi * sin(pi*f) * cos(pi*y) )
         vy = self.A * pi * sin(pi*y) * fx * cos(pi*f)
         return vx, vy
 
@@ -137,7 +137,6 @@ class DG_velocity_field:
         assert(R_vx.shape == (self.nt, self.n_wsamples, self.n))
         
         for tid in range(self.nt):
-            print(tid, " .. ", end=' ')
             t = self.ts[tid]
             for k in range(self.n_wsamples):
                 w = self.sample_w(k)
@@ -325,8 +324,8 @@ def plot_modes_of_rank_reduced_field(dg, t, n_modes):
     
 
 
-gsize = 50
-nt = 50
+gsize = 200
+nt = 200
 dt = 10/nt
 dxy = 2/gsize
 A = 0.1
@@ -342,10 +341,10 @@ cloud = DG_scalar_field(gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_rang
 
 print("Generating realisations")
 R_vx, R_vy, _ = dg1.generate_R()
-# max_vels, min_vels = dg1.find_max_vels(R_vx, R_vy)
-# print("max_vels= ", max_vels)
-# print("min_vels", min_vels)
-# print()
+max_vels, min_vels = dg1.find_max_vels(R_vx, R_vy)
+print("max_vels= ", max_vels)
+print("min_vels", min_vels)
+print()
 
 print("Computing modes and coeffs")
 C, M, _, R_mean = dg1.compute_modes_and_coeffs(n_modes)
