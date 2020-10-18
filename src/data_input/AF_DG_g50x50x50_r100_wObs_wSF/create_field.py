@@ -43,14 +43,21 @@ class DG_scalar_field:
         w = pi/2
         # term1 = self.eps * sin(w*t) * (x**2)
         # term2 = (1 - 2*self.eps*sin(w*t)) * x
-        term1 = x-(t/10)
-        term2 = 0
-        return  term1 + term2 
+        T = t/10
+        l = 1
+        if (0 <= x + T <= l):
+            return 1
+        elif (l < x + T < l+1):
+            return -1*(x + T) + l+1
+        else:
+            return 0
+
 
     def phi(self, x, y, t):
-        # return self.A*(1+ sin(0.5*pi*self.f(x,t))*sin(0.5*pi*y)*sin(2*pi*t/20))
-        return 0
-        
+        # *sin(2*pi*t/20))
+        # return self.A*(1+ sin(0.25*pi*self.f(x,t))*cos(0.05*pi*(y+1)))
+        return self.A*(self.f(x,t))
+
     def sample_w(self, k):
         w_i, w_f = self.w_range
         r = k/(self.n_wsamples - 1)
@@ -372,8 +379,28 @@ def plot_modes_of_rank_reduced_field(dg, t, n_modes):
     plt.savefig('modes')
 
 
-
+def fill_obstacles(obstacle_mask):
+    ri = int(0.4*final_gsize)
+    rf = int(0.5*final_gsize)
+    ci = int(0.5*final_gsize)
+    cf = int(0.6*final_gsize)
+    obstacle_mask[:, ri:rf, ci:cf]=1
+    return obstacle_mask
     
+def test_scalar_field(all_s_mat, X, Y):
+    images = []
+    fname = "test.png"
+
+    for t in range(nt):
+        s_arr = all_s_mat[t,:,:]
+        plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
+        plt.colorbar()
+        plt.savefig(fname)
+        plt.clf()
+        images.append(imageio.imread(fname))
+    imageio.mimsave('test.gif', images, duration = 0.5)
+
+
 
 
 init_gsize = 50
@@ -381,6 +408,7 @@ nt = 50
 dt = 10/nt
 dxy = 2/init_gsize
 A = 0.5
+A_sc = 3
 eps = 0.1
 op_nrzns = 10
 n_wsamples = 100
@@ -395,7 +423,7 @@ final_gsize = init_gsize*interpolate_degree
 n_modes = 3
 print("initialising objects")
 dg1 = DG_velocity_field(init_gsize, nt, dt, dxy, A, eps, wx, wy, op_nrzns, n_wsamples, w_range, interpolate_degree)
-cloud = DG_scalar_field(final_gsize, nt, dt, dxy, A, eps, op_nrzns, n_wsamples, w_range)
+cloud = DG_scalar_field(final_gsize, nt, dt, dxy, A_sc, eps, op_nrzns, n_wsamples, w_range)
 
 print("Generating realisations")
 R_vx, R_vy, _ = dg1.generate_R()
@@ -423,9 +451,13 @@ print()
 print("generating scalar field")
 all_s_mat = cloud.generate_phi()
 assert(all_s_mat.shape == (nt,final_gsize,final_gsize))
+X,Y = np.meshgrid(cloud.xs, np.flip(cloud.ys))
+test_scalar_field(all_s_mat,X,Y)
 # print(C.shape, M.shape, R_mean.shape)
 
 obstacle_mask = np.zeros((nt, final_gsize, final_gsize), dtype = np.int32)
+obstacle_mask =fill_obstacles(obstacle_mask)
+
 scalar_field_data = [all_s_mat, obstacle_mask]
 files = ["all_u_mat.npy", "all_v_mat.npy", "all_ui_mat.npy", "all_vi_mat.npy", "all_Yi.npy"]
 scalar_files = ["all_s_mat.npy", "obstacle_mask.npy"]

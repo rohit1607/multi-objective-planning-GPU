@@ -48,9 +48,8 @@ class DG_scalar_field:
         return  term1 + term2 
 
     def phi(self, x, y, t):
-        # return self.A*(1+ sin(0.5*pi*self.f(x,t))*sin(0.5*pi*y)*sin(2*pi*t/20))
-        return 0
-        
+        return self.A*(1+ sin(0.5*pi*self.f(x,t))*sin(0.5*pi*y)*sin(2*pi*t/20))
+
     def sample_w(self, k):
         w_i, w_f = self.w_range
         r = k/(self.n_wsamples - 1)
@@ -376,8 +375,8 @@ def plot_modes_of_rank_reduced_field(dg, t, n_modes):
     
 
 
-init_gsize = 50
-nt = 50
+init_gsize = 25
+nt = 3
 dt = 10/nt
 dxy = 2/init_gsize
 A = 0.5
@@ -388,7 +387,7 @@ w_range = ( pi/10, 8*pi/10 )
 wy = 0.5*pi
 wx = pi
 # interpolates 
-interpolate_degree = 1
+interpolate_degree = 8
 final_gsize = init_gsize*interpolate_degree
 
 

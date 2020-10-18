@@ -372,7 +372,13 @@ def plot_modes_of_rank_reduced_field(dg, t, n_modes):
     plt.savefig('modes')
 
 
-
+def fill_obstacles(obstacle_mask):
+    ri = int(0.4*final_gsize)
+    rf = int(0.5*final_gsize)
+    ci = int(0.5*final_gsize)
+    cf = int(0.6*final_gsize)
+    obstacle_mask[:, ri:rf, ci:cf]=1
+    return obstacle_mask
     
 
 
@@ -426,6 +432,8 @@ assert(all_s_mat.shape == (nt,final_gsize,final_gsize))
 # print(C.shape, M.shape, R_mean.shape)
 
 obstacle_mask = np.zeros((nt, final_gsize, final_gsize), dtype = np.int32)
+obstacle_mask =fill_obstacles(obstacle_mask)
+
 scalar_field_data = [all_s_mat, obstacle_mask]
 files = ["all_u_mat.npy", "all_v_mat.npy", "all_ui_mat.npy", "all_vi_mat.npy", "all_Yi.npy"]
 scalar_files = ["all_s_mat.npy", "obstacle_mask.npy"]

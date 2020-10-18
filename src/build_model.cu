@@ -938,9 +938,9 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
 
 
         //check
-        std::cout << "H_coo_len_per_ac" << std::endl;
-        for (int n = 0; n < num_actions; n++)
-          std::cout << H_coo_len_per_ac[n] << std::endl;
+        // std::cout << "H_coo_len_per_ac" << std::endl;
+        // for (int n = 0; n < num_actions; n++)
+        //   std::cout << H_coo_len_per_ac[n] << std::endl;
 
 
         // Copy Device COO rusults to Host COO vectors across actions and append vectors across time
@@ -1569,13 +1569,20 @@ void populate_ac_angles(float* ac_angles, int num_ac_angles){
 void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax){
     //fills array with ac_speeds
     std::cout << "infunc CHeck- num_ac_speeds = " << num_ac_speeds << "\n";
-    int delF = 0;
+    float delF = 0;
     if (num_ac_speeds == 1)
         ac_speeds[0] = Fmax;
     else if (num_ac_speeds > 1){
-        delF = Fmax/(num_ac_speeds-1);
-        for(int i = 0; i<num_ac_speeds; i++)
-            ac_speeds[i] = i*delF;
+        // -----include 0 speed
+        // delF = Fmax/(num_ac_speeds-1);
+        // for(int i = 0; i<num_ac_speeds; i++)
+        //     ac_speeds[i] = i*delF;
+        // ------exclude 0 speed
+        delF = Fmax/(num_ac_speeds);
+        for(int i = 0; i<num_ac_speeds; i++){
+            ac_speeds[i] = (i+1)*delF;
+            std::cout << ac_speeds[i] << "\n";
+        }
     }
     else
         std::cout << "Invalid num_ac_speeds\n";
@@ -1596,6 +1603,7 @@ void populate_actions(float **H_actions, int num_ac_speeds, int num_ac_angles, f
     for (int i=0; i<num_ac_speeds; i++){
         for(int j=0; j<num_ac_angles; j++){
             idx = j + num_ac_angles*i;
+            std::cout << ac_speeds[i] << "\n";
             H_actions[idx][0] = ac_speeds[i];
             H_actions[idx][1] = ac_angles[j];
         }

@@ -48,9 +48,8 @@ class DG_scalar_field:
         return  term1 + term2 
 
     def phi(self, x, y, t):
-        # return self.A*(1+ sin(0.5*pi*self.f(x,t))*sin(0.5*pi*y)*sin(2*pi*t/20))
-        return 0
-        
+        return self.A*(1+ sin(0.5*pi*self.f(x,t))*sin(0.5*pi*y)*sin(2*pi*t/20))
+
     def sample_w(self, k):
         w_i, w_f = self.w_range
         r = k/(self.n_wsamples - 1)
@@ -380,7 +379,7 @@ init_gsize = 50
 nt = 50
 dt = 10/nt
 dxy = 2/init_gsize
-A = 0.5
+A = 0.3
 eps = 0.1
 op_nrzns = 10
 n_wsamples = 100

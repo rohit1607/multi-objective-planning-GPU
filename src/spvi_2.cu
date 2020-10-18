@@ -271,7 +271,7 @@ float compute_sup_norm(const float* dev_v1,
     cudaError_t cudaErr;
 
     // #warning "Temp hack using CPU Sup Norm!"
-    std::cout << "kernel_num_blocks= " << kernel_num_blocks << "\n";
+    // std::cout << "kernel_num_blocks= " << kernel_num_blocks << "\n";
 
     // USE CPU version for now
     if (kernel_num_blocks == 0)
@@ -301,7 +301,7 @@ float compute_sup_norm(const float* dev_v1,
     else
     {
         // USE GPU VERSION
-        std::cout << "N =" << N << "\n";
+        // std::cout << "N =" << N << "\n";
 
         if (s_h_reduce_out_vec == NULL)
         {
@@ -330,7 +330,7 @@ float compute_sup_norm(const float* dev_v1,
             assert(cudaErr_malloc == cudaSuccess && "malloc2 failed");
         }
 
-        std::cout << "pre-reduce-sup-norm-kernel\n";
+        // std::cout << "pre-reduce-sup-norm-kernel\n";
         // Do first stage reduction using CUDA kernel
         // This leaves a length kernel_num_blocks array that needs to still be reduced
         reduce_sup_norm<<<kernel_num_blocks, kernel_num_threads, kernel_num_threads*sizeof(float)>>>(dev_v1, dev_v2, s_d_reduce_out_vec, N);
