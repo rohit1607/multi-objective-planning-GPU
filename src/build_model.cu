@@ -857,14 +857,12 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
             // thrust::device_vector<int32_t> D_num_uq_s2(ncells*num_actions,0);
             // thrust::device_vector<int32_t> D_prSum_num_uq_s2(ncells*num_actions);
         //TODO: corner case for last chunk size
-        std::cout << "CHECKING ------------CHECKING-----1\n";
         std::cout << "efCszNa = " << efCszNa << "\n";
         thrust::device_vector<long long int> D_num_uq_s2_pc(efCszNa,0);
 
         thrust::device_vector<long long int> D_prSum_num_uq_s2_pc(efCszNa);
         long long int* num_uq_s2_ptr = thrust::raw_pointer_cast(&D_num_uq_s2_pc[0]);
         long long int* prSum_num_uq_s2_ptr = thrust::raw_pointer_cast(&D_prSum_num_uq_s2_pc[0]);
-        std::cout << "CHECKING ------------CHECKING-----2\n";
 
             int tprint = nt - 2;
             if (t == tprint)
@@ -874,7 +872,6 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
         // float* D_master_S2_arr_ip = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
         thrust::stable_sort_by_key(D_master_S2_vector.begin(), D_master_S2_vector.end(), D_master_vals.begin());
         thrust::stable_sort_by_key(D_master_vals.begin(), D_master_vals.end(), D_master_S2_vector.begin());
-        std::cout << "CHECKING ------------CHECKING-----3\n";
 
             if (t == tprint)
                 print_device_vector(D_master_S2_vector,0, 10, "post-sort: D_master_S2_vector", " ", 0);
@@ -926,8 +923,8 @@ void build_sparse_transition_model_at_T(int t, int bDimx, thrust::device_vector<
                                     num_uq_s2_ptr, prSum_num_uq_s2_ptr);
         cudaDeviceSynchronize();
 
-        print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
-        print_device_vector(D_coo_s2, 0, 10, "D_coo_s2", " ", 0);
+        // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
+        // print_device_vector(D_coo_s2, 0, 10, "D_coo_s2", " ", 0);
 
         //reduce D_num_uq_s2_pc in chunks of actions - to find nnz or len_coo_arr for each action
         for (int n = 0; n < num_actions; n++){

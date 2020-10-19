@@ -4,9 +4,11 @@ from definition import ROOT_DIR
 from os.path import join
 from utils.custom_functions import extract_velocity, get_angle_in_0_2pi
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import matplotlib.cm as cmx
 import math
 import imageio
-
+import cv2
 # plot function
 def action_to_quiver(a):
     vt = a[0]
@@ -243,7 +245,7 @@ def setup_grid_in_plot(fig, ax, g):
     ax.set_ylim(0,g.ys[-1] + (dy/2))
 
     minor_ticks = [i*g.dx/1 for i in range(gsize + 1)]
-    major_ticks = [i*g.dx/1 for i in range(0, gsize + 1)]
+    major_ticks = [i*g.dx/1 for i in range(0, gsize + 1, 20)]
 
     ax.set_xticks(minor_ticks, minor=True)
     ax.set_xticks(major_ticks, minor=False)
@@ -393,7 +395,11 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
     if show_field_at_t_r != None:
         t_r = show_field_at_t_r
         _,_,vx_list, vy_list = func_show_velocity_field(t_r, vel_field_data, g, gsize, xy_list=xy_list)
-        plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
+        vx_grid = np.reshape(np.array(vx_list), (gsize,gsize))
+        vy_grid = np.reshape(np.array(vy_list), (gsize,gsize))
+        plt.streamplot(X, Y, vx_grid, vy_grid, color = 'k')
+        # plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
+
 
     # Also plots scalar field
     if show_scalar_field_at_t_r != None:
@@ -596,29 +602,43 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
 
     xy_list = get_xy_list(g, gsize)
     x_list, y_list = xy_list
-
+    len_list = [len(traj[0]) for traj in traj_list]
+    print("------CHECK----")
+    print(np.min(len_list),np.max(len_list))
+    print(len_list[0:10])
     rzn_list = [i for i in range(nrzns)]
     images = []
     for t in range(nt):
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(1, 1, 1)
         setup_grid_in_plot(fig, ax, g)
+        title = "t = " + str(t)
+        plt.title(title)
 
         obs_mask_mat = scalar_field_data[1]
         func_show_obstacles(t, obs_mask_mat, g, gsize)    
 
         _,_,vx_list, vy_list = func_show_velocity_field((t,0), vel_field_data, g, gsize, xy_list=xy_list)
-        plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
-        # plt.quiver(xtr, ytr, vx_list, vy_list, color = 'c', alpha = 0.5, scale_units = 'x', scale =1)
+        vx_grid = np.reshape(np.array(vx_list), (gsize,gsize))
+        vy_grid = np.reshape(np.array(vy_list), (gsize,gsize))
+        plt.streamplot(X, Y, vx_grid, vy_grid, color = 'k')
+        # plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
 
         s_arr = func_show_scalar_field((t,0), scalar_field_data, g, gsize, xy_list=xy_list)
         plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
 
+        jet = cm = plt.get_cmap('jet')
+        cNorm = colors.Normalize(vmin=np.min(len_list), vmax=np.max(len_list))
+        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
+        scalarMap._A = []
+
+ 
 
         for k in rzn_list:
             xtr, ytr = traj_list[k]
             try:
-                plt.plot(xtr[0:t+1], ytr[0:t+1])
+                colorval = scalarMap.to_rgba(len_list[k])
+                plt.plot(xtr[0:t+1], ytr[0:t+1],color=colorval)
                 plt.scatter(xtr[0:t], ytr[0:t], s=10)
                 plt.scatter(xtr[t], ytr[t], color = 'k', marker = '^', s = 20)
             except:
@@ -630,7 +650,12 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
         plt.close()
         images.append(imageio.imread(filename+".png"))
 
-    imageio.mimsave(join(fpath,'movie.gif'), images, duration = 1.5)
+        if t > np.max(len_list):
+            "breaking"
+            break
+  
+    gif_name = filename + ".gif"
+    imageio.mimsave(gif_name, images, duration = 1)
 
     return
     
@@ -719,16 +744,17 @@ if __name__ == "__main__":
     print("fpath= ", fpath)
     print("len(policy) = ", len(policy_1d))
 
-    plot_learned_policy(g, policy_1d, vel_field_data, scalar_field_data,
-                         fpath, fname='Policy', 
-                         check_interp_at_intermed_points= True, 
-                         show_field_at_t_r = (0,0),
-                         show_scalar_field_at_t_r = (0,0))
+    # plot_learned_policy(g, policy_1d, vel_field_data, scalar_field_data,
+    #                      fpath, fname='Policy', 
+    #                      check_interp_at_intermed_points= True, 
+    #                      show_field_at_t_r = (0,0),
+    #                      show_scalar_field_at_t_r = (0,0))
 
     t_sp_list = []
     interp_t_sp_list = []
 
-    for i in range(len(refd_startpos_list)):
+    # for i in range(len(refd_startpos_list)):
+    for i in range(1):
 
         startpos = refd_startpos_list[i]
         return_list = setup_grid(prob_name, num_ac_speeds = num_ac_speeds, num_ac_angles = num_ac_angles, nt = nt, dt =dt, F =F, 
@@ -768,7 +794,7 @@ if __name__ == "__main__":
     print("No interpol: ", t_sp_list, "\navg=", np.mean(t_sp_list))
     print("WITH interpol: ", interp_t_sp_list, "\navg=", np.mean(interp_t_sp_list))
     
-    dynamic_plot_sequence_and_gif(traj_list, g, policy_1d, 
+    dynamic_plot_sequence_and_gif(interp_traj_list, g, policy_1d, 
                             vel_field_data, scalar_field_data,
                             fpath, fname='Trajectories')
     

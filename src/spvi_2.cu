@@ -463,7 +463,6 @@ static void get_mdp_model(std::string model_fpath){
     cudaStat = cudaMalloc((void**)&s_dev_cooVal, s_nnz*sizeof(float));
     assert(cudaStat == cudaSuccess);
 
-
     // -------------------------------------
     // Copy data to device
     // -------------------------------------
@@ -771,12 +770,11 @@ int main(){
     auto start = high_resolution_clock::now(); 
         get_mdp_model(model_data_path);
         printf("mdp model laoded\n");
+
+        solver_spvi_solve(p_out_policy_vec, p_out_value_func_vec,  max_solver_time_s);
     auto end = high_resolution_clock::now(); 
     auto duration_t = duration_cast<microseconds>(end - start);
-    std::cout << "model_load_time = "<< duration_t.count()/1e6 << std::endl;
-
-    solver_spvi_solve(p_out_policy_vec, p_out_value_func_vec,  max_solver_time_s);
-
+    std::cout << "---- total solve time = "<< duration_t.count()/1e6 << std::endl;
     std::cout << "saving policy and value funtion\n";
     cnpy::npy_save(results_path + "policy.npy", &p_out_policy_vec[0], {p_out_policy_vec.size(),1},"w");
     cnpy::npy_save(results_path + "value_function.npy", &p_out_value_func_vec[0], {p_out_value_func_vec.size(),1},"w");
