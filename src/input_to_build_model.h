@@ -1,8 +1,8 @@
 //Prob type: time, energy1, energy2, energy3
 std::string prob_type = "time"; //verify num_ac_speeds 
-std::string prob_name = "AF_DG_g200x200x100_r500_v1";
+std::string prob_name = "AF_DG_g200x200x3_r100_profTest";
 
-int32_t nt = 100;
+int32_t nt = 3;
 float dt = 1;
 int32_t gsize = 200;
 float dx = 80.0/gsize; float dy = dx;
@@ -11,11 +11,11 @@ float x0 = dx/2;
 float y0 = dy/2;
 
 float F = 1;
-int num_ac_speeds = 1; //verify prob_type
+int num_ac_speeds = 2; //verify prob_type
 int num_ac_angles = 16;
 int32_t num_actions = num_ac_speeds*num_ac_angles;
 
-int32_t nrzns = 500;     // verify with probname
+int32_t nrzns = 100;     // verify with probname
 int32_t bDimx = nrzns;
 
 float r_outbound = -1000;

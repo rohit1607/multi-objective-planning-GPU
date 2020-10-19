@@ -325,9 +325,15 @@ def populate_ac_speeds(speed_list, num_ac_speeds, Fmax):
         speed_list.append(Fmax)
 
     elif num_ac_speeds > 1:
-        delF = Fmax/(num_ac_speeds - 1)
+        # include 0 speed
+        # delF = Fmax/(num_ac_speeds - 1)
+        # for i in range(num_ac_speeds):
+        #     speed_list.append(i*delF)
+        # exclude 0 speed
+        delF = Fmax/(num_ac_speeds)
         for i in range(num_ac_speeds):
-            speed_list.append(i*delF)
+            speed_list.append((i+1)*delF)
+        
 
     return speed_list
 

@@ -626,19 +626,19 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
 
         s_arr = func_show_scalar_field((t,0), scalar_field_data, g, gsize, xy_list=xy_list)
         plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
+        plt.colorbar()
 
-        jet = cm = plt.get_cmap('jet')
-        cNorm = colors.Normalize(vmin=np.min(len_list), vmax=np.max(len_list))
-        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
-        scalarMap._A = []
+        # jet = cm = plt.get_cmap('jet')
+        # cNorm = colors.Normalize(vmin=np.min(len_list), vmax=np.max(len_list))
+        # scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
+        # scalarMap._A = []
 
- 
 
         for k in rzn_list:
             xtr, ytr = traj_list[k]
             try:
-                colorval = scalarMap.to_rgba(len_list[k])
-                plt.plot(xtr[0:t+1], ytr[0:t+1],color=colorval)
+                # colorval = scalarMap.to_rgba(len_list[k])
+                plt.plot(xtr[0:t+1], ytr[0:t+1])
                 plt.scatter(xtr[0:t], ytr[0:t], s=10)
                 plt.scatter(xtr[t], ytr[t], color = 'k', marker = '^', s = 20)
             except:
@@ -707,7 +707,7 @@ if __name__ == "__main__":
     dt = params[4]
     F = params[3]
     endpos = (int(params[8]),int(params[9])) 
-    startpos = (30,35) # (8,14) #
+    startpos = (int(0.15*gsize), int(0.15*gsize))
 
     print("CHECK PARAMS")
     print("gsize =", gsize)
