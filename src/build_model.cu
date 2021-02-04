@@ -1,6 +1,5 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
-#include <thrust/sort.h>
 #include <thrust/copy.h>
 #include <thrust/unique.h>
 #include <thrust/count.h>
@@ -13,19 +12,10 @@
 #include <chrono>
 using namespace std::chrono;
 #include <iostream>
-// #include "get_funcs.h"
-// #include "extract_field.h"
-// #include "move_and_rewards.h"
-// #include "utils.h"
 
 
-long long int GPUmem = 8*1000*1000*1000LL; // using 1000 instead of 1024 
 long long int ncells;
-long long int NcNr;    
-long long int NcNa;    
-long long int NcNrNa;   
-int thrust_fraction = 1; //expected  memory use for thrust method calls in terms of fraction of master_arr size
-int avg_nnz_per_row = 10; // avg num  of nnz per row
+
 
 /*
 ------  Declarations of utility functions from utils.h -------
@@ -57,7 +47,7 @@ void populate_actions(float** H_actions, int num_ac_speeds, int num_ac_angles, f
 
 
 /*
------ subsidiary device functions moved to get_funcs.h/cu -----
+                    ----- Device functions -----
 */
 
 __device__ int32_t get_thread_idx(){
@@ -287,18 +277,6 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     // float r_step = 0;
     *r = 0;         // intiilaise r with 0
 
-
-    //checks TODO: remove checks once verified
-    // if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-    // {
-    //     params[14] = x;
-    //     params[15] = y;
-    //     params[16] = vnetx;
-    //     params[17] = vnety;
-    //     params[18] = xnew;
-    //     params[19] = ynew;
-    //     params[20] = ac_angle;
-    // }
     if (xnew > xs[n])
         {
             xnew = xs[n];
@@ -319,10 +297,7 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             ynew =  ys[0];
             *r += r_outbound;
         }
-    // TODO:xxDONE check logic wrt remainderf. remquof had issue
     int32_t xind, yind;
-    //float remx = remquof((xnew - xs[0]), Dj, &xind);
-    //float remy = remquof(-(ynew - ys[n]), Di, &yind);
     float remx = remainderf((xnew - xs[0]), Dj);
     float remy = remainderf(-(ynew - ys[n]), Di);
     xind = ((xnew - xs[0]) - remx)/Dj;
@@ -349,16 +324,9 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
                 {
                     *r += r_outbound;
                 }
-            
-            if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-            {
-                // params[26] = 9999;
-            }
+        
         }
 
-    // r_step = calculate_one_step_reward(ac_speed, ac_angle, xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
-    // // r_step = -dt;
-    // *r += r_step; //TODO: numerical check remaining
     if (is_terminal(posids[0], posids[1], params))
         {
             *r += r_terminal;
@@ -369,23 +337,14 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
                 *r += r_outbound; 
         }
 
-
     }
 
 
 
 
-
-
-
-/*
-__device__ void extract_velocity() moved to extract_field.h/cu
-*/
-
 __device__ void extract_velocity(int32_t* posids, long long int sp_id, long long int ncells, float* vx, float* vy,
     int32_t T, float* all_u_mat, float* all_v_mat, float* all_ui_mat, 
     float* all_vi_mat, float* all_Yi, float* params){
-
 
 
     int32_t nrzns = params[2];
@@ -515,7 +474,7 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
     int32_t nrzns = params[2]; 
     float r_outbound = params[5];        
     // int32_t is_stationary = params[11];
-    int32_t T = (int32_t)T_arr[0];      // current timestep
+    int32_t T = (int32_t)T_arr[0];          // current timestep
     int32_t idx = get_thread_idx();
     long long int res_idx;
     float vx, vy, rad1, rad2;
@@ -535,15 +494,7 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
         get_posids_from_sp_id(sp_id, gsize, posids);
         get_posids_from_sp_id(sp_id, gsize, posids_S1);
         int32_t rzn_id = get_rzn_id();
-        // if(idx == 0){
-        //     params[23] = posids[0];
-        //     params[24] = posids[1];
-        // }
-        // if(idx == 500){
-        //     params[25] = posids[0];
-        //     params[26] = posids[1];
-        // }
-            
+        
         //  Afer move() these will be overwritten by i and j values of S2
         float r=0;              // to store immediate reward
         float r_step;
@@ -586,8 +537,6 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
         float a = atomicAdd(&sumR_sa[sp_id], r); 
 
         __syncthreads();
-        // if (threadIdx.x == 0 && blockIdx.z == 0)
-        //     sumR_sa[sp_id] = sumR_sa[sp_id]/nrzns;    //TODO: xxdone sumR_sa is now actually meanR_sa!
 
     }//if ends
     return;
@@ -673,12 +622,7 @@ __global__ void reduce_kernel(float* D_master_S2_arr_ip, int t, int Nb, int m,
                 ith_nuq++;                                      // increment i
             }
         }
-        // // to store information about the last of n_uqs S2s
-        // if (ith_nuq < n_uqs ){   //this condition should always be true because i assert ith_nuq == n_uqs - 1
-        //     D_coo_s2_arr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
-        //     D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
-        //     ith_nuq++;                                      // increment i
-        // }
+
    }
    return;
 }
@@ -693,10 +637,7 @@ void print_array(dType* array, int num_elems,std::string array_name, std::string
 }
 
 
-/*
---- print_device_vector() moved to utils.h/cu ---
-IMP: datatype has to be explicityle changed in that file
-*/
+
 
 std::string get_prob_name(int num_ac_speeds, int num_ac_angles, int i_term, int j_term,
                             int tsg_size){
@@ -714,11 +655,19 @@ std::string get_prob_name(int num_ac_speeds, int num_ac_angles, int i_term, int 
     return name;
 }
 
+
+
+
+
+
+
 void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, thrust::device_vector<float> &D_tdummy, 
                                 float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                 float*  D_all_vi_arr, float*  D_all_yi_arr,
                                 float* D_all_s_arr, int* D_all_mask_arr,
-                                thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
+                                thrust::device_vector<float> &D_params, 
+                                thrust::host_vector<float> &H_params,
+                                thrust::device_vector<float> &D_xs, 
                                 thrust::device_vector<float> &D_ys, 
                                 float** H_actions,
                                 thrust::host_vector<int32_t> &H_coo_len_per_ac,
@@ -732,7 +681,9 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
                                 float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
                                 float*  D_all_vi_arr, float*  D_all_yi_arr,
                                 float* D_all_s_arr, int* D_all_mask_arr,
-                                thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
+                                thrust::device_vector<float> &D_params, 
+                                thrust::host_vector<float> &H_params,
+                                thrust::device_vector<float> &D_xs, 
                                 thrust::device_vector<float> &D_ys, 
                                 float** H_actions,
                                 thrust::host_vector<int32_t> &H_coo_len_per_ac,
@@ -742,65 +693,33 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
                                 thrust::host_vector<float>* H_Aarr_of_Rs
                                 ){
 
-    /***** 
-        TODO:
-        read from H_params and not from D_params
-        *****/
-    int gsize = (int) D_params[0];
-    int num_actions =  (int)D_params[1];
-    int nrzns = (int) D_params[2];
-    int nt = (int) D_params[10];
-    int m = (int)D_params[18];
+
+    int gsize = (int) H_params[0];
+    int num_actions =  (int)H_params[1];
+    int nrzns = (int) H_params[2];
+    int nt = (int) H_params[10];
+    int m = (int)H_params[18];
     int Nb = (m*m) + 1; //+1 is to store no. of S2s not lying in nieghbour_array. Ideally it should have 0
-
-        // check velocity data and vector data
-        // std::cout << "D_paramas: " << std::endl;
-        // for (int i = 0; i< 10; i ++)
-        //     std::cout << D_params[i] << std::endl;
-
-        // I think doing it this way does not issue a memcpy at the backend. thats why it fails
-        // std::cout << "D_all_u_arr" << std::endl;
-        // for (int i = 0; i< 10; i ++)
-        //     std::cout << D_all_u_arr[i] << std::endl;                                 
-
+                               
     // raw pointer casts
     float* D_T_arr = thrust::raw_pointer_cast(&D_tdummy[0]);
     float* xs = thrust::raw_pointer_cast(&D_xs[0]);
     float* ys = thrust::raw_pointer_cast(&D_ys[0]);
     float* params = thrust::raw_pointer_cast(&D_params[0]);
 
-    // print_array<float>(xs, 2, "xs", "");
-
-    // std::cout << "D_xs= " << std::endl;
-    // for (int i = 0; i< 10; i++)
-    //     std::cout << D_xs[i] << " " ;
-
-    
     //Define Kernel launch parameters for transition calculation kernel
     int DimGrid_z = (nrzns/bDimx)+1;
     if (nrzns % bDimx == 0)
         DimGrid_z = (nrzns/bDimx);
-
-    // checks
-    // if (t == nt-2){
-    //     std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
-    //     std::cout<<"gisze= " << gsize << std::endl;
-    //     std::cout<<"DimGrid_z = " << DimGrid_z << std::endl;
-    //     std::cout<<"bDimx = " <<  bDimx << std::endl;
-    // }
- 
-
+    
     // initialse master S2 array
     thrust::device_vector<float> D_master_S2_vector(ncells * Nb, 0);
     float* D_master_S2_arr = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
     
     // initialise master sum_Rsa array - sumRsa's 
     // Important to initialise it with 0
-    // need to intiilase with 0 at for each chunknum
     thrust::device_vector<float> D_master_sumRsa_vector(ncells, 0);
     float* D_master_sumRsa_arr = thrust::raw_pointer_cast(&D_master_sumRsa_vector[0]);
-    // thrust::fill(D_master_S2_vector.begin(), D_master_S2_vector.end(), 0);
-    // thrust::fill(D_master_sumRsa_vector.begin(), D_master_sumRsa_vector.end(), 0);
 
     // define kerel block and grid configuration
     dim3 DimGrid(gsize, gsize, DimGrid_z);
@@ -808,11 +727,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
 
     float ac_speed = H_actions[action_id][0];
     float ac_angle = H_actions[action_id][1];
-    /***** 
-        TODO:
-        check fill operation
-        *****/
- 
+
     // launch kernel for @a @t
     transition_calc<<< DimGrid, DimBlock >>> (D_T_arr, 
         ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
@@ -821,6 +736,18 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
         D_master_S2_arr);
 
     cudaDeviceSynchronize();
+
+    // checks
+    // std::cout << "D_xs= " << std::endl;
+    // for (int i = 0; i< 10; i++)
+    //     std::cout << D_xs[i] << " " ;
+
+    // if (t == nt-2){
+    //     std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
+    //     std::cout<<"gisze= " << gsize << std::endl;
+    //     std::cout<<"DimGrid_z = " << DimGrid_z << std::endl;
+    //     std::cout<<"bDimx = " <<  bDimx << std::endl;
+    // }
 
     // // CHECK copy data back to host for check
     // std::cout << "a" << n <<"\n vx at s1=0: " << D_params[31] << std::endl;
@@ -845,14 +772,15 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     int Nthreads = D_master_sumRsa_vector.size();
     assert(Nthreads == ncells);
 
-    int threads_per_block = 1024;
+    int threads_per_block = 64;
     int blocks_per_grid = (Nthreads/threads_per_block) + 1;
     assert( blocks_per_grid * threads_per_block >= Nthreads);
     
     compute_mean<<< blocks_per_grid, threads_per_block >>>(D_master_sumRsa_arr, Nthreads, nrzns);
 
     // TODO: in optimazation phase move this line after initilisation num_uq_S2 vectors.
-    cudaDeviceSynchronize();
+    // cudaDeviceSynchronize();
+
     //initialising vectors for counting nnzs or number of uniqe S2s for S1s
     thrust::device_vector<unsigned long long int> D_num_uq_s2(ncells,0);
     thrust::device_vector<unsigned long long int> D_prSum_num_uq_s2(ncells);
@@ -897,7 +825,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
 
     Nthreads = ncells;
     assert(Nthreads == ncells);
-    threads_per_block = 1024;
+    threads_per_block = 64;
     blocks_per_grid = (Nthreads/threads_per_block) + 1;
     // reduce operation to fill COO arrays
     reduce_kernel<<<blocks_per_grid, threads_per_block>>>(D_master_S2_arr, t, Nb, m,
@@ -905,21 +833,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
                                 num_uq_s2_ptr, prSum_num_uq_s2_ptr);
     cudaDeviceSynchronize();
 
-        //Checks
-        // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
-        // print_device_vector(D_coo_s2, 0, 10, "D_coo_s2", " ", 0);
 
-        // //reduce D_num_uq_s2_pc in chunks of actions - to find nnz or len_coo_arr for each action
-        // for (int n = 0; n < num_actions; n++){
-        //         // H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*ncells, D_num_uq_s2_pc.begin() +  (n+1)*ncells, (float) 0, thrust::plus<float>());
-        //     H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*eff_chunk_size, D_num_uq_s2_pc.begin() + (n+1)*eff_chunk_size, (float) 0, thrust::plus<float>());
-        // }
-        // thrust::inclusive_scan(H_coo_len_per_ac.begin(), H_coo_len_per_ac.end(), H_coo_len_per_ac.begin());
-        
- 
-
-
-    // in algo2, this function is for one action, and I already know nnz.
     // nnz should be filled in a global array 
     H_coo_len_per_ac[action_id] = nnz;
     // Copy Device COO rusults to Host COO vectors across actions and append vectors across time
@@ -930,6 +844,10 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     H_Aarr_of_Rs[action_id].insert(H_Aarr_of_Rs[action_id].end(), D_master_sumRsa_vector.begin(), D_master_sumRsa_vector.end());
 
         //checks
+
+        // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
+        // print_device_vector(D_coo_s2, 0, 10, "D_coo_s2", " ", 0);
+
         // std::cout << "H_coo_len_per_ac" << std::endl;
         // for (int n = 0; n < num_actions; n++)
         //   std::cout << H_coo_len_per_ac[n] << std::endl;
@@ -948,7 +866,6 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
         //     std::cout << std::endl;
         // }
 
-
         // // array of num_actions decive_vvectors for sum_Rsa_vec
         // // initialasation with 0 is important. because values are added to this
         // thrust::host_vector<float> H_arr_sumR_sa[num_actions];
@@ -962,49 +879,6 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
 
 
 
-void get_cell_chunk_partition(int gsize, int nrzns, int num_actions,
-                int nmodes, int nt, int thrust_fraction, int avg_nnz_per_row,
-                int* nchunks, long long int* chunk_size, long long int* last_chunk_size){
-    // reads dimensions of input data related to the problem and returns sizes
-    // and number of chunks into which ncells (spatial grid) is divided.
-    // So as to be able to fit all necesarry data structures in GPU memory
-
-    // long long int max_s_val = ncells*nt*num_actions*1LL;
-    long long int master_arr_size_term ;
-    // if (mas_s_val < 2147483647) //TODO: dynamic datatype allocation int vs long long int based on 
-                                    // max_s_value possible in master_s2_array
-    master_arr_size_term = 16*nrzns*num_actions; // 2 long long int arrays
-    long long int vdata_size_term = 8*nt*(nmodes+1);
-    long long int coo_term = 8*3*avg_nnz_per_row*num_actions;
-    int k = thrust_fraction;
-    long long int denom = ((1+k)*master_arr_size_term) + vdata_size_term + coo_term;
-
-    std::cout << "master_arr_size_term= " << master_arr_size_term << "\n" 
-        << "vdata_size_term = " <<vdata_size_term << "\n"
-        << "denom = " << denom << "\n" ;
-
-    int local_chunk_size = (int) (GPUmem/denom);
-    if (local_chunk_size < ncells){
-        std::cout << "----Partition case 1:\n";
-        *chunk_size = local_chunk_size;
-        *nchunks = (ncells/local_chunk_size) + 1;
-        *last_chunk_size = ncells - ( (local_chunk_size)*(*nchunks - 1) );
-    }
-    else{
-        std::cout << "----Partition case 2:\n";
-        *chunk_size = ncells/2;
-        *last_chunk_size = ncells/2;
-        *nchunks = 2;
-    }
-    std::cout << "ncells = " << ncells << "\n";
-    std::cout << "local_chunk_size = " << local_chunk_size << "\n";
-    std::cout << "nchunks = " << *nchunks << "\n" 
-    << "chunk_size = " << *chunk_size << "\n" 
-    << "last_chunk_size = " << *last_chunk_size << "\n";
-
-return;
-}
-       
 int get_reward_type(std::string prob_type){
     // returns 
     // 0 for time
@@ -1025,53 +899,17 @@ int get_reward_type(std::string prob_type){
 }
 
 
+// ------------------------------- MAIN ()  ---------------------------------
+
+
+
 
 int main(){
 
-// -------------------- input data starts here ---------------------------------
-
-    //  // DG3 data
-    // // TODO: take parameters form different file
-    // std::string op_FnamePfx = "data/output/test_DG_nt60/"; //path for storing op npy data.
-
-    // float nt = 60;
-    // float is_stationary = 0;
-    // float gsize = 100;
-    // float num_actions = 8;
-    // float nrzns = 5000;
-    // float bDimx = nrzns;
-    // float F = 20.2;
-    // float r_outbound = -10;
-    // float r_terminal = 10;
-    // float i_term = 19;
-    // float j_term = 40;
-    // float nmodes = 5;
-    // float x0 = 0.005;
-    // float y0 = 0.005;
-    // float dx = 0.01; float dy = 0.01;
-    // float dt = 0.0004;
-    // if (nrzns >= 1000)
-    //     bDimx = 1000;
-
-    // //TODO: define output file savepath
-
-    // float z = -9999;
-    // // TODO: 1. read paths form file
-    // //       2. Make sure files are stored in np.float32 format
-    // std::string data_path = "data/nT_60/";
-    // std::string all_u_fname = data_path + "all_u_mat.npy";
-    // std::string all_v_fname = data_path + "all_v_mat.npy";
-    // std::string all_ui_fname = data_path + "all_ui_mat.npy";
-    // std::string all_vi_fname = data_path + "all_vi_mat.npy";
-    // std::string all_yi_fname = data_path + "all_Yi.npy";
-    
-// --------------------------------------------------------------------------------
+    // -------------------- input data starts here ---------------------------------
 
 
     #include "input_to_build_model.h"
-
-    if (nrzns >= 1000)
-    bDimx = 1000;
  
     int reward_type = get_reward_type(prob_type);
     std::cout << "Reward type: " << reward_type << "\n";
@@ -1090,8 +928,7 @@ int main(){
     fout << op_FnamePfx;
     fout.close();
 
-    // TODO: 1. read paths form file xx DONE
-    //       2. Make sure files are stored in np.float32 format
+    // TODO:  Make sure files are stored in np.float32 format
     std::string data_path = "data_input/" + prob_name + "/";
     std::string all_u_fname = data_path + "all_u_mat.npy";
     std::string all_v_fname = data_path + "all_v_mat.npy";
@@ -1102,8 +939,8 @@ int main(){
     std::string all_mask_fname = data_path + "obstacle_mask.npy"; //this file stored in int32
 
 
+    // -------------------- input data ends here ---------------------------------
 
-// -------------------- input data ends here ---------------------------------
 
     // make directory for storing output data from this file
     make_dir(op_Fname_upto_prob_name);
@@ -1134,12 +971,14 @@ int main(){
     float* all_s_mat = all_s_cnpy.data<float>();
     int* all_mask_mat = all_mask_cnpy.data<int>();
 
+    // CHECKS:
     // print_array<float>(all_u_mat, all_u_n_elms, "all_u_mat", " ");
     // print_array<float>(all_ui_mat, all_ui_n_elms,"all_ui_mat", " ");
     // print_array<float>(all_yi_mat, all_yi_n_elms,"all_yi_mat", " ");
 
     std::cout << "Finished reading Velocity Field Data !" << std::endl;
     assert(neighb_gsize <= gsize);
+    assert((int)neighb_gsize%2 == 1);    // neighb_gsize must be odd
 
     //TODO: fill params in a function
     // Contains implicit casting from int32_t to float
@@ -1172,7 +1011,7 @@ int main(){
     thrust::host_vector<float> H_ys(gsize, -1);
     float* xs = thrust::raw_pointer_cast(&H_xs[0]);
     float* ys = thrust::raw_pointer_cast(&H_ys[0]);
-    //TODO:  2. move the fucntion to a separate file
+
     define_xs_or_ys(xs, dx, x0, gsize);
     define_xs_or_ys(ys, dy, y0, gsize);
 
@@ -1181,15 +1020,12 @@ int main(){
     for(int i=0; i<num_actions; i++)
         H_actions[i] = new float[2];
     populate_actions(H_actions, num_ac_speeds, num_ac_angles, F);
-    std::cout << "CHECK:   ACTIONS:    \n";
-    for(int i=0; i<num_actions; i++){
-        std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
-    }
+    // std::cout << "CHECK:   ACTIONS:    \n";
+    // for(int i=0; i<num_actions; i++){
+    //     std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
+    // }
 
-    //TODO: move to custom functions
-    // populate_ac_angles(ac_angles, num_actions);
-    // populte_ac_speeds()
-    // print_array<float>(ac_angles, num_actions, "ac_angles", "\n");
+
 
     //----- start copying data to device --------
 
@@ -1226,6 +1062,7 @@ int main(){
     thrust::host_vector<long long int> H_Aarr_of_cooS2[(int)num_actions];
     thrust::host_vector<float> H_Aarr_of_cooProb[(int)num_actions];
     thrust::host_vector<float> H_Aarr_of_Rs[(int)num_actions];
+
     //initialised with 0 size. later data from device is inserted/appended to the end of vector
     for (int i =0; i < num_actions; i++){
         H_Aarr_of_cooS1[i] = thrust::host_vector<long long int> (0);
@@ -1240,7 +1077,9 @@ int main(){
         H_Aarr_of_Rs[i] = thrust::host_vector<float> (0);
     }
 
-    ncells = gsize*gsize;           // assign value to global variable
+    // assign value to global variable
+    ncells = gsize*gsize;           
+
     // copy data from host to device
     D_params = H_params;
     D_xs = H_xs;
@@ -1250,6 +1089,7 @@ int main(){
     auto start = high_resolution_clock::now(); 
     auto end = high_resolution_clock::now(); 
     auto duration_t = duration_cast<microseconds>(end - start);
+
     //IMP: Run time loop till nt-1. There ar no S2s to S1s in the last timestep
     for(int t = 0; t < nt-1; t++){
         std::cout << "*** Computing data for timestep, T = " << t << std::endl;
@@ -1262,7 +1102,7 @@ int main(){
                 build_sparse_transition_model_at_T_at_a(t, action_id, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr, 
                         D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
                         D_all_s_arr, D_all_mask_arr,
-                        D_params, D_xs, D_ys, H_actions, 
+                        D_params, H_params, D_xs, D_ys, H_actions, 
                         H_coo_len_per_ac,
                         H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
                         H_Aarr_of_Rs);
@@ -1285,9 +1125,10 @@ int main(){
     for (int i =0; i < num_actions; i++){
         H_Aarr_of_Rs[i].insert(H_Aarr_of_Rs[i].end(), H_rewards_at_end_t.begin(), H_rewards_at_end_t.end());
     }
+
     //Check
-    for (int i =0; i < num_actions; i++)
-        std::cout << H_Aarr_of_Rs[i].size() << " ";
+    // for (int i =0; i < num_actions; i++)
+    //     std::cout << H_Aarr_of_Rs[i].size() << " ";
     
 
     // find nnz per action
@@ -1295,6 +1136,7 @@ int main(){
     long long int DP_relv_params[2] = {ncells*nt, num_actions*1LL};
 
     long long int master_nnz = 0;       //running sum of nnz going across actions
+
     // calculate inclusive prefix sum of nnz's across actions 
     // will be used to access indeces while concatenating results across across actions
     for(int i = 0; i < num_actions; i++){
@@ -1302,17 +1144,17 @@ int main(){
         H_master_PrSum_nnz_per_ac[i] = master_nnz;
     }
 
-    print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
     unsigned long int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
-    std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;
-    std::cout << "chek denom = " << sizeof(DP_relv_params[0]) << std::endl;
+    // print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
+    // std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;
+    // std::cout << "chek denom = " << sizeof(DP_relv_params[0]) << std::endl;
 
     //checks
-    std::cout << "total/master_nnz = " << master_nnz << std::endl;
-    std::cout << "H_Aarr_of_cooS1[i].size()" << std::endl;
-    for(int i = 0; i < num_actions; i++)
-        std::cout << H_Aarr_of_cooS1[i].size() << std::endl;
-    print_array<long long int>(&H_Aarr_of_cooS2[0][0], 10,  "H_Aarr_of_cooS2[0]", " ");
+    // std::cout << "total/master_nnz = " << master_nnz << std::endl;
+    // std::cout << "H_Aarr_of_cooS1[i].size()" << std::endl;
+    // for(int i = 0; i < num_actions; i++)
+    //     std::cout << H_Aarr_of_cooS1[i].size() << std::endl;
+    // print_array<long long int>(&H_Aarr_of_cooS2[0][0], 10,  "H_Aarr_of_cooS2[0]", " ");
 
 
     // save final coo data
@@ -1340,6 +1182,9 @@ int main(){
 //------------ main ends here ------------------------------------------
 
 
+
+
+
 void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     thrust::host_vector<long long int> &H_master_cooS1, 
     thrust::host_vector<long long int> &H_master_cooS2, 
@@ -1362,7 +1207,6 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     long long int m_idx = 0;
     int n_states = DP_relv_params[0];
 
-    std::cout << "in save \n" ;
 
     for(int i = 0; i < num_actions; i++){
         for(int j = 0; j< H_Aarr_of_cooS1[i].size(); j++){
@@ -1372,7 +1216,6 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
         }
     }
 
-    std::cout << "in save \n" ;
     m_idx = 0;
     for(int i = 0; i < num_actions; i++){
         for(int j = 0; j< H_Aarr_of_cooS2[i].size(); j++){
@@ -1381,7 +1224,6 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
         }
     }
 
-    std::cout << "in save \n" ;
     m_idx = 0;
     for(int i = 0; i < num_actions; i++){
         for(int j = 0; j< H_Aarr_of_cooProb[i].size(); j++){
@@ -1390,7 +1232,6 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
         }
     }
 
-    std::cout << "in save \n" ;
     m_idx = 0;
     for(int i = 0; i < num_actions; i++){
         for(int j = 0; j< H_Aarr_of_Rs[i].size(); j++){
@@ -1447,7 +1288,10 @@ cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elem
 
 }
 
-
+/*
+--- print_device_vector()  ---
+IMP: datatype has to be explicityle changed in that file
+*/
 
 // template<typename dType>
 void print_device_vector( thrust::device_vector<long long int> &array, int start_id, int end_id, std::string array_name, std::string end, int method){
@@ -1507,7 +1351,7 @@ void populate_ac_angles(float* ac_angles, int num_ac_angles){
 
 void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax){
     //fills array with ac_speeds
-    std::cout << "infunc CHeck- num_ac_speeds = " << num_ac_speeds << "\n";
+    // std::cout << "infunc CHeck- num_ac_speeds = " << num_ac_speeds << "\n";
     float delF = 0;
     if (num_ac_speeds == 1)
         ac_speeds[0] = Fmax;
@@ -1520,7 +1364,7 @@ void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax){
         delF = Fmax/(num_ac_speeds);
         for(int i = 0; i<num_ac_speeds; i++){
             ac_speeds[i] = (i+1)*delF;
-            std::cout << ac_speeds[i] << "\n";
+            // std::cout << ac_speeds[i] << "\n";
         }
     }
     else
@@ -1528,6 +1372,7 @@ void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax){
     
     return;
 }
+
 
 
 void populate_actions(float **H_actions, int num_ac_speeds, int num_ac_angles, float Fmax){
@@ -1542,7 +1387,7 @@ void populate_actions(float **H_actions, int num_ac_speeds, int num_ac_angles, f
     for (int i=0; i<num_ac_speeds; i++){
         for(int j=0; j<num_ac_angles; j++){
             idx = j + num_ac_angles*i;
-            std::cout << ac_speeds[i] << "\n";
+            // std::cout << ac_speeds[i] << "\n";
             H_actions[idx][0] = ac_speeds[i];
             H_actions[idx][1] = ac_angles[j];
         }

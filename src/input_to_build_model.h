@@ -16,7 +16,7 @@ int num_ac_angles = 16;
 int32_t num_actions = num_ac_speeds*num_ac_angles;
 
 int32_t nrzns = 5000;     // verify with probname
-int32_t bDimx = nrzns;
+int32_t bDimx = 64; // based on optimum threeads per block obtained after multiple test runs
 
 float r_outbound = -1000;
 float r_terminal = 100;
@@ -31,10 +31,10 @@ int32_t j_term = (int)(0.8*gsize);    // verify if within grid
 // int32_t j_term = 180; //90
 
 int term_subgrid_size = 1; //number of cells al
-float nmodes = 1;   // verify: same as in velocity field
+float nmodes = 3;   // verify: same as in velocity field
 
 // size of nighbourhood grid- should always be odd
-float neighb_gsize = 21;
+float neighb_gsize = 11;
 
 int32_t is_stationary = 0;  // 0 is false
 
