@@ -245,7 +245,7 @@ def setup_grid_in_plot(fig, ax, g):
     ax.set_ylim(0,g.ys[-1] + (dy/2))
 
     minor_ticks = [i*g.dx/1 for i in range(gsize + 1)]
-    major_ticks = [i*g.dx/1 for i in range(0, gsize + 1, 20)]
+    major_ticks = [i*g.dx/1 for i in range(0, gsize + 1, 10)]
 
     ax.set_xticks(minor_ticks, minor=True)
     ax.set_xticks(major_ticks, minor=False)

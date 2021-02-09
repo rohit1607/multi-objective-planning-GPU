@@ -131,7 +131,7 @@ class DG_velocity_field:
     def vx_vy(self, x, y, t, w):
         fx = self.fx(x,t,w)
         f = self.f(x,t,w)
-        vx = -( self.A * pi * sin(self.wx*f) * cos(self.wy *y) )
+        vx = -( 0.5 * self.A * pi * sin(self.wx*f) * cos(self.wy *y) )
         vy = self.A * pi * sin(self.wy * y) * fx * cos(self.wx*f)
         return vx, vy
 
@@ -190,7 +190,7 @@ class DG_velocity_field:
         C = np.matmul(u1, s1_mat)
         M = vh1
         assert(C.shape == (self.n_wsamples, n_modes))
-        assert(M.shape == (n_modes, self.n*2))
+        # assert(M.shape == (n_modes, self.n*2))
         return C,M
 
     def compute_modes_and_coeffs(self, n_modes):
@@ -222,6 +222,28 @@ class DG_velocity_field:
             C[tid,:,:] = Ct
             M[tid,:,:] = Mt 
         return C, M, R_mean_full, R_mean
+
+    def compute_phi_modes_and_coefs(self, n_modes):
+        Rx, Ry, phi = self.generate_R()
+        phi_mean = np.mean(phi, axis=1) #mean along n_samples
+        print("phi_mean.shape = ", phi_mean.shape)
+        phi_mean_full = np.empty_like(phi)
+        for k in range(self.n_wsamples):
+            phi_mean_full[:,k,:] = phi_mean 
+
+        del_phi = phi - phi_mean_full
+        C = np.empty((self.nt, self.n_wsamples, n_modes),dtype = np.float32)
+        M = np.empty((self.nt, n_modes, self.n), dtype = np.float32)
+        sn = 5 # to print first sn singular values~
+        for tid in range(self.nt):
+            t = self.ts[tid]
+            u, s, vh = np.linalg.svd(del_phi[tid,:,:])
+            print(" out of ",len(s),"at tid= ",tid,"; t= ", t, ": \n", np.round(s[0:sn],2),"\n")
+            Ct, Mt = self.rank_reduction(u,s,vh, n_modes)
+            C[tid,:,:] = Ct
+            M[tid,:,:] = Mt 
+        return C, M
+
 
     def reshape_matrices_for_square_grid(self,C, M, R_mean, n_modes):
         # means
@@ -362,21 +384,27 @@ def test_rank_reduced_field(dg1,t,kth_rzn,n_modes):
 def plot_modes_of_rank_reduced_field(dg, t, n_modes):
     assert(n_modes <= np.min((dg.n_wsamples, dg.n*2)))
     C, M, R_mean_full, _= dg.compute_modes_and_coeffs(n_modes)
+    phi_C, phi_M =  dg.compute_phi_modes_and_coefs(n_modes)
+
 
     fig = plt.figure(figsize=(10, 10))
 
     _, Mt = C[t,:,:], M[t,:,:]
+    _, phi_Mt = phi_C[t,:,:], phi_M[t,:,:]
     X,Y = np.meshgrid(dg.xs, np.flip(dg.ys))
 
     for k in range(4):
         ax = fig.add_subplot(2, 2, k+1)
         Mt_k = Mt[k,:]
+        phi_Mt_k = phi_Mt[k,:]
         mode_vx = np.reshape(Mt_k[0:dg.n], (dg.gsize,dg.gsize))
         mode_vy = np.reshape(Mt_k[dg.n:dg.n*2], (dg.gsize,dg.gsize))
+        mode_phi = np.reshape(phi_Mt_k[0:dg.n], (dg.gsize,dg.gsize))
         ax.streamplot(X, Y, mode_vx, mode_vy, color='k', linewidth=2)
+        plt.contourf(X, Y, mode_phi, cmap='RdBu')
         ax.set_ylabel(str(k))
     
-    plt.savefig('modes')
+    plt.savefig('modes', bbox_inches = "tight", dpi=300)
 
 
 
@@ -403,81 +431,84 @@ def test_scalar_field(all_s_mat, X, Y):
     imageio.mimsave('test.gif', images, duration = 0.5)
 
 
-init_gsize = 25
-nt = 10
-dt = 10/nt
-dxy = 2/init_gsize
-A = 0.5
-A_sc = 3
-eps = 0.1
-op_nrzns = 10
-n_wsamples = 1000
-w_range = ( pi/10, 8*pi/10 )
-wy = 0.5*pi
-wx = pi
-# interpolates 
-interpolate_degree = 8
-final_gsize = init_gsize*interpolate_degree
-n_modes = 3
+# init_gsize = 25
+# nt = 10
+# dt = 10/nt
+# dxy = 2/init_gsize
+# A = 0.5
+# A_sc = 3
+# eps = 0.1
+# op_nrzns = 10
+# n_wsamples = 1000
+# w_range = ( pi/10, 8*pi/10 )
+# wy = 0.5*pi
+# wx = pi
+# # interpolates 
+# interpolate_degree = 8
+# n_modes = 3
 
-print("gsize=", final_gsize)
-print("nt=", nt)
-print("nr=", n_wsamples)
-print("nmodes=",n_modes)
+def build_environment_DG_with_westward_clouds(init_gsize, nt, dt, dxy, A, A_sc, eps,
+                                                op_nrzns, n_wsamples, w_range, wx, wy, 
+                                                interpolate_degree, n_modes):
 
-print("initialising objects")
-dg1 = DG_velocity_field(init_gsize, nt, dt, dxy, A, eps, wx, wy, op_nrzns, n_wsamples, w_range, interpolate_degree)
-cloud = DG_scalar_field(final_gsize, nt, dt, dxy, A_sc, eps, op_nrzns, n_wsamples, w_range)
+    final_gsize = init_gsize*interpolate_degree
+    print("gsize=", final_gsize)
+    print("nt=", nt)
+    print("nr=", n_wsamples)
+    print("nmodes=",n_modes)
 
-print("Generating realisations")
-R_vx, R_vy, _ = dg1.generate_R()
-max_vels, min_vels, mean_vels = dg1.find_max_vels(R_vx, R_vy)
-print("max_vels= ", max_vels)
-print("min_vels", min_vels)
-print("mean_vels", mean_vels)
-# print()
+    print("initialising objects")
+    dg1 = DG_velocity_field(init_gsize, nt, dt, dxy, A, eps, wx, wy, op_nrzns, n_wsamples, w_range, interpolate_degree)
+    cloud = DG_scalar_field(final_gsize, nt, dt, dxy, A_sc, eps, op_nrzns, n_wsamples, w_range)
 
-print("Computing modes and coeffs")
-C, M, _, R_mean = dg1.compute_modes_and_coeffs(n_modes)
+    print("Generating realisations")
+    R_vx, R_vy, _ = dg1.generate_R()
+    max_vels, min_vels, mean_vels = dg1.find_max_vels(R_vx, R_vy)
+    print("max_vels= ", max_vels)
+    print("min_vels", min_vels)
+    print("mean_vels", mean_vels)
+    # print()
 
+    print("Computing modes and coeffs")
+    C, M, _, R_mean = dg1.compute_modes_and_coeffs(n_modes)
+    plot_modes_of_rank_reduced_field(dg1, 4, 4)
+    # test_rank_reduced_field(dg1,1,0,n_modes)
 
-# test_rank_reduced_field(dg1,1,0,n_modes)
+    print("Reshaping matrices for grid")
+    init_vel_field_data = dg1.reshape_matrices_for_square_grid(C, M, R_mean, n_modes)
 
-print("Reshaping matrices for grid")
-init_vel_field_data = dg1.reshape_matrices_for_square_grid(C, M, R_mean, n_modes)
+    print("Interpolating")
+    all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi_mat = init_vel_field_data
+    vel_field_data = dg1.interpolate_data_to_refined_grid(all_u_mat, all_v_mat, all_ui_mat, all_vi_mat,n_modes)
+    vel_field_data.append(all_Yi_mat)
+    for x in vel_field_data:
+        x = np.nan_to_num(x, copy=False)
+    print()
 
-print("Interpolating")
-all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi_mat = init_vel_field_data
-vel_field_data = dg1.interpolate_data_to_refined_grid(all_u_mat, all_v_mat, all_ui_mat, all_vi_mat,n_modes)
-vel_field_data.append(all_Yi_mat)
-for x in vel_field_data:
-    x = np.nan_to_num(x, copy=False)
-print()
+    print("generating scalar field")
+    all_s_mat = cloud.generate_phi()
+    assert(all_s_mat.shape == (nt,final_gsize,final_gsize))
+    X,Y = np.meshgrid(cloud.xs, np.flip(cloud.ys))
+    test_scalar_field(all_s_mat, X, Y)
+    # print(C.shape, M.shape, R_mean.shape)
 
-print("generating scalar field")
-all_s_mat = cloud.generate_phi()
-assert(all_s_mat.shape == (nt,final_gsize,final_gsize))
-X,Y = np.meshgrid(cloud.xs, np.flip(cloud.ys))
-test_scalar_field(all_s_mat, X, Y)
-# print(C.shape, M.shape, R_mean.shape)
+    obstacle_mask = np.zeros((nt, final_gsize, final_gsize), dtype = np.int32)
+    obstacle_mask =fill_obstacles(obstacle_mask)
 
-obstacle_mask = np.zeros((nt, final_gsize, final_gsize), dtype = np.int32)
-obstacle_mask =fill_obstacles(obstacle_mask)
+    scalar_field_data = [all_s_mat, obstacle_mask]
+    files = ["all_u_mat.npy", "all_v_mat.npy", "all_ui_mat.npy", "all_vi_mat.npy", "all_Yi.npy"]
+    scalar_files = ["all_s_mat.npy", "obstacle_mask.npy"]
 
-scalar_field_data = [all_s_mat, obstacle_mask]
-files = ["all_u_mat.npy", "all_v_mat.npy", "all_ui_mat.npy", "all_vi_mat.npy", "all_Yi.npy"]
-scalar_files = ["all_s_mat.npy", "obstacle_mask.npy"]
+    for i in range(5):
+        np.save(files[i], vel_field_data[i])
+        print("Saved ", files[i], "shape= ", vel_field_data[i].shape,
+                                    " type=", vel_field_data[i].dtype,
+                                    "max_val=", np.max(vel_field_data[i]))
+    for i in range(len(scalar_field_data)):
+        np.save(scalar_files[i], scalar_field_data[i])
+        print("Saved ", scalar_files[i],"shape= ", scalar_field_data[i].shape,
+                                    " type=", scalar_field_data[i].dtype,
+                                    "max_val=", np.max(scalar_field_data[i]))
 
-for i in range(5):
-    np.save(files[i], vel_field_data[i])
-    print("Saved ", files[i], "shape= ", vel_field_data[i].shape,
-                                " type=", vel_field_data[i].dtype,
-                                "max_val=", np.max(vel_field_data[i]))
-for i in range(len(scalar_field_data)):
-    np.save(scalar_files[i], scalar_field_data[i])
-    print("Saved ", scalar_files[i],"shape= ", scalar_field_data[i].shape,
-                                " type=", scalar_field_data[i].dtype,
-                                "max_val=", np.max(scalar_field_data[i]))
-
-print("\n ----- Saved field files! ------\n")
+    print("\n ----- Saved field files! ------\n")
 
