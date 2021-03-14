@@ -246,7 +246,11 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
         return ((Cr*(rad2 + rad1)/2) - (Cf*ac_speed*ac_speed) - Ct)*dt;
     }
 
-    else
+    else if (method == 3){
+        return ((Cr*(rad2 + rad1)/2)- Ct)*dt;
+    }
+
+    else 
         return 0;
 
 }
@@ -1112,6 +1116,7 @@ int main(){
         std::cout << std::endl ;
         duration_t = duration_cast<microseconds>(end - start);
         std::cout << "duration@t = "<< duration_t.count()/1e6 << "sec" << std::endl;
+        std::cout << 3*H_Aarr_of_cooS1[0].size()*4*1e-6 << " MB" << std::endl;
         std::cout << std::endl << std::endl;
     }
 

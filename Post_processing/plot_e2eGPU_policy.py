@@ -9,6 +9,8 @@ import matplotlib.cm as cmx
 import math
 import imageio
 import cv2
+from pathlib import Path
+
 # plot function
 def action_to_quiver(a):
     vt = a[0]
@@ -240,23 +242,23 @@ def get_action_from_policy1d(policy_1d, state_tuple, g):
 
 def setup_grid_in_plot(fig, ax, g):
 
-    msize = 15
+    msize = 100
     ax.set_xlim(0,g.xs[-1] + (dx/2))
     ax.set_ylim(0,g.ys[-1] + (dy/2))
 
-    minor_ticks = [i*g.dx/1 for i in range(gsize + 1)]
-    major_ticks = [i*g.dx/1 for i in range(0, gsize + 1, 10)]
+    minor_ticks = [i*g.dx/1 for i in range(0, gsize + 1, 10)]
+    major_ticks = [i*g.dx/1 for i in range(0, gsize + 1, 40)]
 
     ax.set_xticks(minor_ticks, minor=True)
     ax.set_xticks(major_ticks, minor=False)
     ax.set_yticks(major_ticks, minor=False)
     ax.set_yticks(minor_ticks, minor=True)
 
-    ax.grid(b= True, which='both', color='#CCCCCC', axis='both',linestyle = '-', alpha = 0.5)
-    ax.tick_params(axis='both', which='both', labelsize=6)
+    # ax.grid(b= True, which='both', color='#CCCCCC', axis='both',linestyle = '-', alpha = 0.5, zorder = -1e5)
+    ax.tick_params(axis='both', which='both', labelsize=20)
 
-    ax.set_xlabel('X (Non-Dim)')
-    ax.set_ylabel('Y (Non-Dim)')
+    # ax.set_xlabel('X (Non-Dim)', fontsize = 20)
+    # ax.set_ylabel('Y (Non-Dim)')
 
     st_point= g.start_state
 
@@ -349,7 +351,7 @@ def func_show_scalar_field(t_r, scalar_field_data, g, gsize, xy_list=None):
             s_list.append(s)
     s_arr = np.array(s_list)
     s_arr = s_arr.reshape((gsize, gsize))
-    print("check shapes: ", X.shape, Y.shape, s_arr.shape)
+    # print("check shapes: ", X.shape, Y.shape, s_arr.shape)
     return s_arr
 
 def func_show_obstacles(t, obs_mask_mat, g, gsize):
@@ -357,11 +359,12 @@ def func_show_obstacles(t, obs_mask_mat, g, gsize):
         for j in range(gsize):
             if obs_mask_mat[t,i,j] == 1:
                 x_corners, y_corners = get_general_square_corners(g, (t,i,j))
-                plt.fill(x_corners, y_corners, 'k', alpha = 0.5, zorder = -1e2)
+                plt.fill(x_corners, y_corners, color ='dimgray', alpha = 1, zorder = 1)
     return
 
 
-def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_field_data, fpath,
+def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_field_data,
+                                nrzns, nrzns_to_plot, fpath,
                                 fname='Trajectories', 
                                 with_policy_interp = False,
                                 show_grid_policy = False, 
@@ -397,7 +400,7 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
         _,_,vx_list, vy_list = func_show_velocity_field(t_r, vel_field_data, g, gsize, xy_list=xy_list)
         vx_grid = np.reshape(np.array(vx_list), (gsize,gsize))
         vy_grid = np.reshape(np.array(vy_list), (gsize,gsize))
-        plt.streamplot(X, Y, vx_grid, vy_grid, color = 'k')
+        plt.streamplot(X, Y, vx_grid, vy_grid, color = 'k', zorder = 0)
         # plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
 
 
@@ -416,7 +419,8 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
 
     print("Trajectory plot: Starting rzn loop")
     for rzn in range(nrzns):
-        print("rzn ", rzn)
+        if rzn%100 == 0 or rzn ==  nrzns-1:
+            print("rzn ", rzn)
         g.set_state(g.start_state)
         dont_plot =False
         bad_flag = False
@@ -596,7 +600,7 @@ def plot_learned_policy(g, policy_1d, vel_field_data, scalar_field_data,
 
 
 def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d, 
-                            vel_field_data, scalar_field_data,
+                            vel_field_data, scalar_field_data,nrzns, nrzns_to_plot,
                             fpath, fname='Trajectories'):
 
 
@@ -621,7 +625,7 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
         _,_,vx_list, vy_list = func_show_velocity_field((t,0), vel_field_data, g, gsize, xy_list=xy_list)
         vx_grid = np.reshape(np.array(vx_list), (gsize,gsize))
         vy_grid = np.reshape(np.array(vy_list), (gsize,gsize))
-        plt.streamplot(X, Y, vx_grid, vy_grid, color = 'k')
+        plt.streamplot(X, Y, vx_grid, vy_grid, color = 'k', zorder = -1e4)
         # plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
 
         s_arr = func_show_scalar_field((t,0), scalar_field_data, g, gsize, xy_list=xy_list)
@@ -638,9 +642,9 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
             xtr, ytr = traj_list[k]
             try:
                 # colorval = scalarMap.to_rgba(len_list[k])
-                plt.plot(xtr[0:t+1], ytr[0:t+1])
-                plt.scatter(xtr[0:t], ytr[0:t], s=10)
-                plt.scatter(xtr[t], ytr[t], color = 'k', marker = '^', s = 20)
+                plt.plot(xtr[0:t+1], ytr[0:t+1], zorder = 1e2)
+                plt.scatter(xtr[0:t], ytr[0:t], s=10, zorder = 1e2)
+                plt.scatter(xtr[t], ytr[t], color = 'k', marker = '^', s = 20, zorder = 1e5)
             except:
                 pass
 
@@ -655,12 +659,71 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
             break
   
     gif_name = filename + ".gif"
-    imageio.mimsave(gif_name, images, duration = 1)
+    imageio.mimsave(gif_name, images, duration = 0.5)
 
     return
     
 
+def dynamic_plot_sequence(traj_list, g, policy_1d, 
+                            vel_field_data, scalar_field_data,nrzns, nrzns_to_plot,
+                            fpath, plot_interval, prob_type, fname='Trajectories'):
 
+    plot_seq_path = join(fpath, "plot_sequence")
+    Path(plot_seq_path).mkdir(parents=False, exist_ok=True)
+    xy_list = get_xy_list(g, gsize)
+    x_list, y_list = xy_list
+    len_list = [len(traj[0]) for traj in traj_list]
+    print("------CHECK----")
+    print(np.min(len_list),np.max(len_list))
+    print(len_list[0:10])
+    rzn_list = [i for i in range(nrzns)]
+
+    for t in range(nt):
+        if (t%plot_interval == 0 or t == np.max(len_list) or t == nt-1):
+            fig = plt.figure(figsize=(10, 10))
+            ax = fig.add_subplot(1, 1, 1)
+            setup_grid_in_plot(fig, ax, g)
+            title = "t = " + str(t)
+            plt.title(title)
+
+            obs_mask_mat = scalar_field_data[1]
+            func_show_obstacles(t, obs_mask_mat, g, gsize)    
+
+            _,_,vx_list, vy_list = func_show_velocity_field((t,0), vel_field_data, g, gsize, xy_list=xy_list)
+            vx_grid = np.reshape(np.array(vx_list), (gsize,gsize))
+            vy_grid = np.reshape(np.array(vy_list), (gsize,gsize))
+            plt.streamplot(X, Y, vx_grid, vy_grid, color = 'darkblue', zorder = -1e4, arrowsize=3.0)
+            # plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
+
+            s_arr = func_show_scalar_field((t,0), scalar_field_data, g, gsize, xy_list=xy_list)
+            if prob_type == str('energy1') or prob_type == str('time'):
+                vel_mag = (vx_grid**2 + vy_grid**2)**0.5
+                plt.contourf(X, Y, vel_mag, cmap = "Blues", zorder = -1e5)
+            else:
+                plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
+            # plt.colorbar()
+
+            for k in rzn_list:
+                xtr, ytr = traj_list[k]
+                try:
+                    # colorval = scalarMap.to_rgba(len_list[k])
+                    plt.plot(xtr[0:t+1], ytr[0:t+1], linewidth=4, zorder = 1e2)
+                    # plt.scatter(xtr[0:t], ytr[0:t], s=10, zorder = 1e2)
+                    plt.scatter(xtr[t], ytr[t], color = 'k', marker = '^', s = 40, zorder = 1e5)
+                except:
+                    pass
+
+            filename = join(plot_seq_path, fname) + "@t" + str(t) + ".png"
+            plt.savefig(filename, dp = 300)
+            plt.clf()
+            plt.close()
+
+            if t > np.max(len_list):
+                "breaking"
+                break
+  
+
+    return
 
 def get_refd_startpos_list(startpos, tsgsize):
     refd_startpos_list = []
@@ -683,6 +746,7 @@ if __name__ == "__main__":
 
     # read lines as string from file line by line
     file_lines = file.readlines()
+    print(file_lines)
     prob_type = file_lines[0][0:-1]
     prob_name = file_lines[1][0:-1]
     prob_specs = file_lines[2][0:-1]
@@ -692,7 +756,9 @@ if __name__ == "__main__":
             prob_name, "\n", 
             prob_specs, "\n", 
             modelOutput_path)
-    
+    print("prob_type=",prob_type)
+    prob_type = str(prob_type)
+
     # parameters
     params = np.load(join( join(ROOT_DIR, modelOutput_path), "prob_params.npy"))
     params = params.reshape((len(params),))
@@ -707,7 +773,10 @@ if __name__ == "__main__":
     dt = params[4]
     F = params[3]
     endpos = (int(params[8]),int(params[9])) 
-    startpos = (int(0.15*gsize), int(0.15*gsize))
+
+    # startpos = (int(0.2*gsize), int(0.2*gsize))
+    startpos = (int(0.8*gsize), int(0.5*gsize))
+    nrzns_to_plot = 100
 
     print("CHECK PARAMS")
     print("gsize =", gsize)
@@ -733,7 +802,7 @@ if __name__ == "__main__":
     # setup grid
     return_list = setup_grid(prob_name, num_ac_speeds = num_ac_speeds, num_ac_angles = num_ac_angles, nt = nt, dt =dt, F =F, 
                             startpos = startpos, endpos = endpos, Test_grid= True, gsize = gsize, dx = dx, dy = dy, tsgsize=tsgsize)
-    g, xs, ys, X, Y, vel_field_data, nmodes, useful_num_rzns, paths, params, param_strsetup_grid, scalar_field_data = return_list
+    g, xs, ys, X, Y, vel_field_data, nmodes, _, paths, params, param_strsetup_grid, scalar_field_data = return_list
 
     # read policy
     fpath = join(ROOT_DIR, "src/data_solverOutput/" + prob_type + "/" + prob_name + "/" + prob_specs + "/")
@@ -757,12 +826,12 @@ if __name__ == "__main__":
     for i in range(1):
 
         startpos = refd_startpos_list[i]
-        return_list = setup_grid(prob_name, num_ac_speeds = num_ac_speeds, num_ac_angles = num_ac_angles, nt = nt, dt =dt, F =F, 
-                                startpos = startpos, endpos = endpos, Test_grid= True, gsize = gsize, dx = dx, dy = dy, tsgsize=tsgsize)
-        g, xs, ys, X, Y, vel_field_data, nmodes, useful_num_rzns, paths, params, param_strsetup_grid, scalar_field_data = return_list
+        # return_list = setup_grid(prob_name, num_ac_speeds = num_ac_speeds, num_ac_angles = num_ac_angles, nt = nt, dt =dt, F =F, 
+        #                         startpos = startpos, endpos = endpos, Test_grid= True, gsize = gsize, dx = dx, dy = dy, tsgsize=tsgsize)
+        # g, xs, ys, X, Y, vel_field_data, nmodes, useful_num_rzns, paths, params, param_strsetup_grid, scalar_field_data = return_list
 
         t_data = plot_exact_trajectory_set_DP(g, policy_1d, X, Y, 
-                                    vel_field_data, scalar_field_data,
+                                    vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
                                     fpath,
                                     with_policy_interp = False,
                                     fname='Trajectories_sp'+ str(i), 
@@ -772,7 +841,7 @@ if __name__ == "__main__":
                                     show_scalar_field_at_t_r=(0,0))
 
         interp_t_data = plot_exact_trajectory_set_DP(g, policy_1d, X, Y, 
-                                    vel_field_data, scalar_field_data,
+                                    vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
                                     fpath,
                                     with_policy_interp = True,
                                     fname='Trajectories_interp_pol_sp'+ str(i), 
@@ -794,10 +863,16 @@ if __name__ == "__main__":
     print("No interpol: ", t_sp_list, "\navg=", np.mean(t_sp_list))
     print("WITH interpol: ", interp_t_sp_list, "\navg=", np.mean(interp_t_sp_list))
     
-    dynamic_plot_sequence_and_gif(interp_traj_list, g, policy_1d, 
-                            vel_field_data, scalar_field_data,
-                            fpath, fname='Trajectories')
-    
+    # dynamic_plot_sequence_and_gif(interp_traj_list, g, policy_1d, 
+    #                         vel_field_data, scalar_field_data,
+    #                         fpath, fname='Trajectories')
+
+    print("plotting ans saving dynamic plot sequence...")
+    plot_interval = 2
+    print("with plot interval =", plot_interval)
+    dynamic_plot_sequence(interp_traj_list, g, policy_1d, 
+                            vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
+                            fpath, plot_interval, prob_type, fname='Trajectories')
     
     
     
