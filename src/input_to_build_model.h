@@ -1,10 +1,10 @@
 //Prob type: time, energy1, energy2, energy3
-std::string prob_type = "time"; //verify num_ac_speeds 
-std::string prob_name = "AF_DG_g200x200x200_r1000_Tf20_dynObs_2";
+std::string prob_type = "energy2"; //verify num_ac_speeds 
+std::string prob_name = "DG3_g100x100x120_r5k_DynObs";
 
-int32_t nt = 200;
+int32_t nt = 120;
 float dt = 1;
-int32_t gsize = 200;
+int32_t gsize = 100;
 float dx = 1; float dy = dx;
 
 float x0 = dx/2;
@@ -15,7 +15,7 @@ int num_ac_speeds = 2; //verify prob_type
 int num_ac_angles = 16;
 int32_t num_actions = num_ac_speeds*num_ac_angles;
 
-int32_t nrzns = 1000;     // verify with probname
+int32_t nrzns = 5000;     // verify with probname
 int32_t bDimx = 64; // based on optimum threeads per block obtained after multiple test runs
 
 float r_outbound = -10000;

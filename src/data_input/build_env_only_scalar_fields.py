@@ -126,10 +126,48 @@ def fill_obstacles(obstacle_mask, final_gsize, nt, dyn_obstacle_data):
             rd = int(ru + obs_width)
             # if (cl == 0 or cl == final_gsize -1 or cr == 0 or cr == final_gsize -1 or ru == 0 or ru == final_gsize -1  or rd == 0 or rd == final_gsize -1):
             # if obstacle is in domain
+
             if (0 < cl < final_gsize-1) and (0 < cr < final_gsize-1) and (0 < ru < final_gsize-1) and (0 < rd < final_gsize-1):
                 obstacle_mask[t, ru:rd, cl:cr] = 1
             else:
                 obstacle_mask[t, :, :] = 0
+
+    elif mode == 'multiple_dynamic':
+        obs_upper_row, obs_left_col, obs_width, obs_speed, _ = dyn_obstacle_data
+        assert(0<obs_left_col<final_gsize and 0<obs_upper_row<final_gsize)
+        ru_i = [obs_upper_row, obs_upper_row] #both obstacles along the same row
+        # rd_i = ru_i + obs_width
+        cl_i = [obs_left_col, obs_left_col + (final_gsize/2)]
+        # cr_i = cl_i + obs_width
+        num_obs = len(ru_i)
+        for t in range(nt):
+            for k in range(num_obs):
+                cl = floor(cl_i[k] + (t * obs_speed[0]))%final_gsize
+                cr = int(cl + obs_width)%final_gsize
+                ru = floor(ru_i[k] + (t * obs_speed[1]))%final_gsize
+                rd = int(ru + obs_width)%final_gsize
+                # if (cl == 0 or cl == final_gsize -1 or cr == 0 or cr == final_gsize -1 or ru == 0 or ru == final_gsize -1  or rd == 0 or rd == final_gsize -1):
+                # if obstacle is in domain
+                
+                # if (0 < cl < final_gsize-1) and (0 < cr < final_gsize-1) and (0 < ru < final_gsize-1) and (0 < rd < final_gsize-1):
+                #     obstacle_mask[t, ru:rd, cl:cr] = 1
+                # else:
+                #     obstacle_mask[t, :, :] = 0
+
+                if (cl < cr) and (ru < rd):
+                    obstacle_mask[t, ru:rd, cl:cr] = 1
+                elif (cl > cr) and (ru < rd):
+                    obstacle_mask[t, ru:rd, cl:] = 1
+                    obstacle_mask[t, ru:rd, 0:cr] = 1
+                elif (cl < cr) and (ru > rd):
+                    obstacle_mask[t, ru:, cl:cr] = 1
+                    obstacle_mask[t, 0:rd, cl:cr] = 1
+                elif (cl > cr) and (ru > rd):
+                    obstacle_mask[t, ru:, cl:] = 1
+                    obstacle_mask[t, 0:rd, cl:] = 1
+                    obstacle_mask[t, ru:, 0:cr] = 1
+                    obstacle_mask[t, 0:rd, 0:cr] = 1
+
 
     return obstacle_mask 
 

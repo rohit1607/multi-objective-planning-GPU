@@ -7,6 +7,10 @@ from scipy.interpolate import griddata
 from os.path import join
 import os,sys,inspect
 from pathlib import Path
+import pandas as pd
+import seaborn as sns
+
+
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -44,17 +48,19 @@ class plot_environment_fields:
         self.strmplot_arrowsize  = 3.0 # scaling factor
         self.strmplot_lw = 2 # linewidth of streamplot
 
-    def plot_modes(self, t, show_contours="mode_vel_mag", show_fig=True, save_fig=False):
+    def plot_modes(self, t, show_contours="mode_vel_mag", show_colorbar=False, show_fig=True, save_fig=False):
         # t is the time index at which the plot is made
         fig = plt.figure(figsize=(10, 10))
         gs1 = gridspec.GridSpec(2, 2)
-        gs1.update(wspace=0.05, hspace=0.05) # set the spacing between axes. 
+        gs1.update(wspace=0.05, hspace=0.15) # set the spacing between axes. 
  
         for k in range(4): #hardcoded for first 4 modes
             # ax = fig.add_subplot(2, 2, k+1)
+            title = "Mode " + str(k+1)
             ax = plt.subplot(gs1[k])
             ax.axes.xaxis.set_visible(False)
             ax.axes.yaxis.set_visible(False)
+            ax.axes.set_title(title, fontsize=22)
             plt.streamplot(self.X, self.Y, self.all_ui_mat[t,k,:,:], self.all_vi_mat[t,k,:,:],color='k', 
                             linewidth=self.strmplot_lw, arrowsize=0.5*self.strmplot_arrowsize)
             if show_contours == "phi":
@@ -64,6 +70,9 @@ class plot_environment_fields:
                 v_t_k = self.all_vi_mat[t,k,:,:]
                 vel_mag_t_k = (u_t_k**2 + v_t_k**2)**0.5 #velocity magnitude at t,k
                 plt.contourf(self.X, self.Y, vel_mag_t_k, cmap='Blues')
+            if show_colorbar==True:
+                cbar = plt.colorbar()
+                cbar.ax.tick_params(labelsize=self.num_fontsize) 
 
         if save_fig:
             plt.savefig(join(self.prob_path, "modes@") + str(t),bbox_inches = "tight", dp = 300)
@@ -144,7 +153,7 @@ class plot_environment_fields:
       
 
         if show_streams:
-            plt.streamplot(self.X, self.Y, u_t_k, v_t_k,color='k', linewidth=self.strmplot_lw, arrowsize=self.strmplot_arrowsize)
+            plt.streamplot(self.X, self.Y, u_t_k, v_t_k, color='k', linewidth=self.strmplot_lw, arrowsize=self.strmplot_arrowsize)
         if show_contours != None:
             if show_contours == "phi":
                 plt.contourf(self.X, self.Y, phi_t_k, cmap='bwr')
@@ -173,7 +182,7 @@ class plot_environment_fields:
         ax = fig.add_subplot(1, 1, 1)
         self.setup_grid_in_plot(fig, ax)
         cb =''
-        plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd", alpha = 0.5)
+        plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd_r", alpha = 0.5)
         if show_obstacle:
             self.plot_obstacle(t)
         if show_colorbar:
@@ -212,7 +221,7 @@ class plot_environment_fields:
         ax = fig.add_subplot(1, 1, 1)
         self.setup_grid_in_plot(fig, ax)
 
-        plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd", alpha = 0.5)
+        plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd_r", alpha = 0.5)
         matmul_ui_Yi_t = 0
         matmul_vi_Yi_t = 0
         matmul_phi_i_phi_Yi_t = 0
@@ -246,7 +255,7 @@ class plot_environment_fields:
         fname = "last_fig_in_gif.png"
 
         for t in range(self.nt):
-            plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd", alpha = 0.5)
+            plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd_r", alpha = 0.5)
             self.plot_obstacle(t)
             plt.savefig(fname)
             plt.clf()
@@ -264,8 +273,8 @@ class plot_environment_fields:
                 fig = plt.figure(figsize=(10, 10))
                 ax = fig.add_subplot(1, 1, 1)
                 self.setup_grid_in_plot(fig, ax)
-                title = "t = " + str(t)
-                plt.title(title)
+                # title = "bg_"+ show_contours+ " t = " + str(t)
+                # plt.title(title)
 
                 print(t, end='\t')
                 matmul_ui_Yi_t = 0
@@ -285,17 +294,20 @@ class plot_environment_fields:
                 except:
                     pass
             
-                plt.streamplot(self.X, self.Y, u_t_k, v_t_k,color='k', linewidth=self.strmplot_lw, arrowsize=self.strmplot_arrowsize)
+                plt.streamplot(self.X, self.Y, u_t_k, v_t_k,color='k', linewidth=self.strmplot_lw, arrowsize=self.strmplot_arrowsize, arrowstyle='->')
                 if show_contours != None:
                     if show_contours == "scalar_field":
-                        plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd", alpha = 0.5)
+                        plt.contourf(self.X, self.Y, self.all_s_mat[t,:,:], cmap = "YlOrRd_r", alpha = 0.5)
                     if show_contours == "vel_mag":
                         vel_mag_t_k = (u_t_k**2 + v_t_k**2)**0.5 #velocity magnitude at t,k
                         plt.contourf(self.X, self.Y, vel_mag_t_k, cmap = 'Blues')
-                self.plot_obstacle(t)
+                # cbar = plt.colorbar()
+                # cbar.ax.tick_params(labelsize=self.num_fontsize) 
 
-                fname = join(plot_seq_path, "env") + "@t" + str(t) + ".png"
-                plt.savefig(fname, dpi =300)
+                self.plot_obstacle(t)
+                fname_pfx = "bg_"+ show_contours+ "env"
+                fname = join(plot_seq_path, fname_pfx) + "@t" + str(t) + ".png"
+                plt.savefig(fname,bbox_inches = "tight", dpi =300)
                 plt.clf()
                 plt.close()
 
@@ -341,11 +353,37 @@ class plot_environment_fields:
                 # ax.set_title(title,fontsize = 22)
         if save_fig == True:        
             plt.savefig(join(self.prob_path, "coeffs"), bbox_inches = "tight", dpi = 300)
+            plt.clf()
+            plt.close()
         if show_fig == True:
             plt.show()
 
 
-prob_name = "DG3_g200x200x200_r5k_DynObs"
+    def coeff_pair_plots(self,t, save_fig=True, show_fig=False):
+        coeffs = self.all_Yi[t,:,0:4]
+        df = pd.DataFrame(coeffs, columns = ['Coef. 1','Coef. 2','Coef. 3','Coef. 4'])
+        sns.set_context("talk", rc={"font.size":10,"axes.titlesize":10,"axes.labelsize":25})   
+
+        g= sns.pairplot(df, corner=True, diag_kind="kde", plot_kws=dict(s=20, edgecolor= 'b', linewidth=0.5, alpha=0.1))
+        # g.map_lower(sns.kdeplot, levels=4, color=".2")
+        # g.set(xlim=(-3, 3))
+        # g.set(ylim=(-3, 3))
+        for ax in g.axes[:,0]:
+            ax.get_yaxis().set_label_coords(-0.31,0.5)
+            # ax.set_xlim((-3,3))
+            # ax.set_ylim((-3,3))
+
+        fname = join(self.prob_path, "coeff_pairplots@") + str(t)
+        if save_fig==True:
+            plt.savefig(fname, dpi = 300)
+            plt.clf()
+            plt.close()
+        if show_fig==True:
+            plt.show()
+
+
+
+prob_name = "DG3_g200x200x200_r5k_2LpDynObs_v2"
 t = 1
 rzn_id = 0
 print("prob_name= ",prob_name)
@@ -354,11 +392,12 @@ prob_path = join(currentdir, prob_name)
 plots = plot_environment_fields(prob_path)
 
 rzn_list = [int(600)*i for i in range(8)] 
-plots.plot_coefs(rzn_list, save_fig=True)
+# plots.plot_coefs(rzn_list, save_fig=True)
 
 # for t in [i for i in range(1,150,40)]:
-# for t in [1, 60, 120 , 180]:
-#     plots.plot_modes(t,save_fig=True, show_fig=False)
+for t in [1, 60, 120 , 180]:
+    # plots.coeff_pair_plots(t, save_fig=True, show_fig=False)
+    plots.plot_modes(t,save_fig=True, show_fig=False, show_colorbar=True)
 #     plots.plot_vel_field(t, rzn_id, show_contours="vel_mag", show_colorbar=False, show_obstacle=False, save_fig=True, show_fig=False)
 #     plots.plot_mean_vel_field(t, rzn_id, show_contours="vel_mag", show_colorbar=False, show_obstacle=False, save_fig=True, show_fig=False)
 
@@ -368,10 +407,11 @@ plots.plot_coefs(rzn_list, save_fig=True)
 # # plots.plot_mean_vel_field(t, rzn_id, show_contours="vel_mag", show_colorbar=True, show_obstacle=False, save_fig=True)
 
 # plots.plot_vel_field(t,rzn_id,show_obstacle=False, show_colorbar=True, save_fig=True)
-# plots.plot_scalar_field(t,rzn_id, show_obstacle=True, save_fig=True)
+# plots.plot_scalar_field(t,rzn_id, show_obstacle=True, show_colorbar=True, save_fig=True)
 # plots.plot_scalar_field(t,rzn_id, show_obstacle=True, show_colorbar=True, save_fig=True)
 # plots.plot_all(t,rzn_id, save_fig=True)
 # plots.plot_obstacle(t)
 # # plots.plot_env_gif()
 # # plots.plot_env_sequence(rzn_id, plot_interval=30, show_contours="vel_mag")
-# plots.plot_env_sequence(rzn_id, plot_interval=30, show_contours="scalar_field")
+plots.plot_env_sequence(rzn_id, plot_interval=60, show_contours="scalar_field")
+# plots.plot_env_sequence(rzn_id, plot_interval=100, show_contours="vel_mag")

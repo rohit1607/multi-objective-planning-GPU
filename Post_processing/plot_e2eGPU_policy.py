@@ -363,6 +363,12 @@ def func_show_obstacles(t, obs_mask_mat, g, gsize):
     return
 
 
+def in_obstacle(obstacle_mask, t, i, j):
+    if obstacle_mask[t,i,j]==1:
+        return True
+    else:
+        return False
+
 def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_field_data,
                                 nrzns, nrzns_to_plot, fpath,
                                 fname='Trajectories', 
@@ -374,6 +380,9 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
 
     # time calculation and state trajectory
     # fsize = 3
+    traj_list = []
+    Cf = 1
+    Cr = 1
 
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(1, 1, 1)
@@ -411,19 +420,17 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
         plt.contourf(X, Y, s_arr, cmap = "YlOrRd", alpha = 0.5, zorder = -1e5)
 
 
-
-    bad_count =0
-    traj_list = []
-    t_list_all = []
-    t_list_reached = []
-
     print("Trajectory plot: Starting rzn loop")
     for rzn in range(nrzns):
+        success = None
+        energy_cons = 0
+        net_energy_cons = 0
+        travel_time = 0
+
         if rzn%100 == 0 or rzn ==  nrzns-1:
             print("rzn ", rzn)
         g.set_state(g.start_state)
-        dont_plot =False
-        bad_flag = False
+
         # t = 0
         G = 0
 
@@ -433,6 +440,7 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
         ay_list = []
 
         t, i, j = g.start_state
+        assert(t==0)
         
         a = get_action_from_policy1d(policy_1d, g.current_state(), g)
         xtr.append(g.x)
@@ -442,25 +450,30 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
         ay_list.append(a_y)
 
         # while (not g.is_terminal()) and g.if_within_actionable_time():
-        while True:
-            vx, vy = extract_velocity(vel_field_data, t, i, j, rzn)
-            # print(vx,"\t", vy,"\t",a)
-            r = g.move_exact(a, vx, vy)
-            G = G + r
-            # t += 1
-            (t, i, j) = g.current_state()
+        for iter in range(g.nt):
+
+            if success == None:
+                vx, vy = extract_velocity(vel_field_data, t, i, j, rzn)
+                # print(vx,"\t", vy,"\t",a)
+                rad1 = scalar_field_data[0][t,i,j]
+                r = g.move_exact(a, vx, vy)
+                G = G + r
+                # t += 1
+                (t, i, j) = g.current_state()
+                rad2 = scalar_field_data[0][t,i,j]
+                travel_time += 1
+                energy_cons += (Cf*a[0])**2
+                net_energy_cons += (Cf*(a[0]**2)) - (Cr*(rad2 + rad1)/2) 
 
             xtr.append(g.x)
             ytr.append(g.y)
 
 
             # if edge state encountered, then increment badcount and Dont plot
-            if g.if_edge_state((i,j)):
-                bad_count += 1
-                # dont_plot=True
-                break
+            if g.if_edge_state((i,j)) or in_obstacle(scalar_field_data[1], t, i ,j):
+                success = False
 
-            if (not g.is_terminal()) and  g.if_within_actionable_time():
+            if (not g.is_terminal()) and  g.if_within_actionable_time() and success == None:
                 if with_policy_interp == True:
                     a = get_interpolated_action(policy_1d, g)
                 else:
@@ -470,49 +483,30 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
                 ay_list.append(a_y)
                 # print("i,j,a",i,j,a)
 
-
             elif g.is_terminal():
-                break
-
+                success = True
+  
             else:
             #  i.e. not terminal and not in actinable time.
             # already checked if ternminal or not. If not terminal 
-            # if time reaches nt ie not within actionable time, then increment badcount and Dont plot
-                bad_count+=1
-                # bad_flag=True
-                # dont_plot=True
-                break
+            # if time reaches nt ie not within actionable time, 
+                success = False
 
-        # xy_traj_r = []  
-        # for xy in zip(xtr, ytr):
-        #     xy_traj_r.append(xy)
-        # traj_list.append(xy_traj_r)
-            
-        if dont_plot==False:
-            plt.plot(xtr, ytr)
-            plt.scatter(xtr,ytr, s = 10)
-            if show_interp_policy_of_traj:
-                l = len(xtr)-1
-                # plt.quiver(xtr[0:l], ytr[0:l], ax_list, ay_list, scale_units = 'x', scale =2)
-                plt.quiver(xtr[0:l], ytr[0:l], ax_list, ay_list)
+        plt.plot(xtr, ytr)
+        plt.scatter(xtr,ytr, s = 10)
+        if show_interp_policy_of_traj:
+            l = travel_time
+            # plt.quiver(xtr[0:l], ytr[0:l], ax_list, ay_list, scale_units = 'x', scale =2)
+            plt.quiver(xtr[0:l], ytr[0:l], ax_list, ay_list)
 
-        if bad_flag==False:
-            traj_list.append((xtr, ytr))
-            t_list_all.append(t)
-            t_list_reached.append(t)
-        #ADDED for trajactory comparison
-        else:
-            traj_list.append(None)
-            t_list_all.append(None)
+        traj_list.append((xtr, ytr, success, travel_time, energy_cons, net_energy_cons))
+
 
     if fname != None:
         plt.savefig(join(fpath, fname),bbox_inches = "tight", dpi=300)
-        # print("*** pickling traj_list ***")
-        # picklePolicy(traj_list, join(fpath,fname))
-        # print("*** pickled ***")
 
-    bad_count_tuple = (bad_count, str(bad_count * 100 / nrzns) + '%')
-    return t_list_all, t_list_reached, bad_count_tuple, traj_list
+
+    return traj_list
 
 
 
@@ -607,9 +601,9 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
     xy_list = get_xy_list(g, gsize)
     x_list, y_list = xy_list
     len_list = [len(traj[0]) for traj in traj_list]
-    print("------CHECK----")
-    print(np.min(len_list),np.max(len_list))
-    print(len_list[0:10])
+    # print("------CHECK----")
+    # print(np.min(len_list),np.max(len_list))
+    # print(len_list[0:10])
     rzn_list = [i for i in range(nrzns)]
     images = []
     for t in range(nt):
@@ -664,10 +658,11 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
     return
     
 
-def dynamic_plot_sequence(traj_list, g, policy_1d, 
+def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d, 
                             vel_field_data, scalar_field_data,nrzns, nrzns_to_plot,
                             fpath, plot_interval, prob_type, fname='Trajectories'):
-
+                            
+    # traj_list = [ (xtr, ytr, success, travel_time, energy_cons, net_energy_cons), (), ()... ]
     plot_seq_path = join(fpath, "plot_sequence")
     Path(plot_seq_path).mkdir(parents=False, exist_ok=True)
     xy_list = get_xy_list(g, gsize)
@@ -677,9 +672,21 @@ def dynamic_plot_sequence(traj_list, g, policy_1d,
     print(np.min(len_list),np.max(len_list))
     print(len_list[0:10])
     rzn_list = [i for i in range(nrzns)]
+    travel_time_list, energy_cons_list, net_energy_cons_list, success_rate = metric_data
+    cmap = plt.get_cmap('plasma')
+    if prob_type == "time":
+        vmin, vmax = np.min(travel_time_list), np.max(travel_time_list)
+    if prob_type == "energy1":
+        vmin, vmax = np.min(energy_cons_list), np.max(energy_cons_list)
+    if prob_type == "energy2":
+        vmin, vmax = np.min(net_energy_cons_list), np.max(net_energy_cons_list)
+    cNorm = colors.Normalize(vmin=vmin, vmax=vmax)
+    scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
+    scalarMap._A = []
 
-    for t in range(nt):
+    for t in range(g.nt):
         if (t%plot_interval == 0 or t == np.max(len_list) or t == nt-1):
+            print("t=",t)
             fig = plt.figure(figsize=(10, 10))
             ax = fig.add_subplot(1, 1, 1)
             setup_grid_in_plot(fig, ax, g)
@@ -704,10 +711,20 @@ def dynamic_plot_sequence(traj_list, g, policy_1d,
             # plt.colorbar()
 
             for k in rzn_list:
-                xtr, ytr = traj_list[k]
+                # print("rzn",k)
+                xtr, ytr, success, travel_time, energy_cons, net_energy_cons = traj_list[k]
+                # print("check xtr", xtr)
+                # if success == False:
+                #     line_col = 'k'
+                if prob_type == "time":
+                    colorval = scalarMap.to_rgba(travel_time)
+                if prob_type == "energy1":
+                    colorval = scalarMap.to_rgba(energy_cons)
+                if prob_type == "energy2":
+                    colorval = scalarMap.to_rgba(net_energy_cons)
                 try:
                     # colorval = scalarMap.to_rgba(len_list[k])
-                    plt.plot(xtr[0:t+1], ytr[0:t+1], linewidth=4, zorder = 1e2)
+                    plt.plot(xtr[0:t+1], ytr[0:t+1], linewidth=1, color=colorval, zorder = 1e4)
                     # plt.scatter(xtr[0:t], ytr[0:t], s=10, zorder = 1e2)
                     plt.scatter(xtr[t], ytr[t], color = 'k', marker = '^', s = 40, zorder = 1e5)
                 except:
@@ -734,8 +751,26 @@ def get_refd_startpos_list(startpos, tsgsize):
 
     return refd_startpos_list
 
+def get_metrics(traj_data):
+    # traj_data = (xtr, ytr, success, travel_time, energy_cons, net_energy_cons)
+    sum_success = 0
+    sum_travel_time = 0
+    sum_energy_cons = 0
+    sum_net_energy_cons = 0
+    travel_time_list = []
+    energy_cons_list = []
+    net_energy_cons_list = []
+    success_list = []
+    for traj in traj_data:
+        _, _, success, travel_time, energy_cons, net_energy_cons = traj
+        if success == True:
+            sum_success += 1
+            travel_time_list.append(travel_time)
+            energy_cons_list.append(energy_cons)
+            net_energy_cons_list.append(net_energy_cons)
+    success_rate = sum_success/len(traj_data)
 
-
+    return [travel_time_list, energy_cons_list, net_energy_cons_list, success_rate]
 
 if __name__ == "__main__":
 
@@ -830,49 +865,85 @@ if __name__ == "__main__":
         #                         startpos = startpos, endpos = endpos, Test_grid= True, gsize = gsize, dx = dx, dy = dy, tsgsize=tsgsize)
         # g, xs, ys, X, Y, vel_field_data, nmodes, useful_num_rzns, paths, params, param_strsetup_grid, scalar_field_data = return_list
 
-        t_data = plot_exact_trajectory_set_DP(g, policy_1d, X, Y, 
+        traj_data = plot_exact_trajectory_set_DP(g, policy_1d, X, Y, 
                                     vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
                                     fpath,
                                     with_policy_interp = False,
                                     fname='Trajectories_sp'+ str(i), 
                                     show_grid_policy = False, 
-                                    show_interp_policy_of_traj = True,
+                                    show_interp_policy_of_traj = False,
                                     show_field_at_t_r=(0,0),
                                     show_scalar_field_at_t_r=(0,0))
 
-        interp_t_data = plot_exact_trajectory_set_DP(g, policy_1d, X, Y, 
+        interp_traj_data = plot_exact_trajectory_set_DP(g, policy_1d, X, Y, 
                                     vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
                                     fpath,
                                     with_policy_interp = True,
                                     fname='Trajectories_interp_pol_sp'+ str(i), 
                                     show_grid_policy = False, 
-                                    show_interp_policy_of_traj = True,
+                                    show_interp_policy_of_traj = False,
                                     show_field_at_t_r=(0,0),
                                     show_scalar_field_at_t_r=(0,0))
 
-        t_list_all, t_list_reached, bad_count_tuple, traj_list = t_data
-        t_sp_list.append(t_list_reached[0])
-        np.save(join(fpath,'traj_list'), traj_list)
+
+        np.save(join(fpath,'traj_data'), traj_data)
         # print("NO Interp: first succ EAT = ", t_list_reached[0])
-        t_list_all, t_list_reached, bad_count_tuple, interp_traj_list = interp_t_data
-        interp_t_sp_list.append(t_list_reached[0])
-        np.save(join(fpath,'traj_list_wip'), interp_traj_list)
+        # np.save(join(fpath,'interp_traj_data'), interp_traj_data)
 
-        # print("With Interp: first succ EAT = ", t_list_reached[0])
+        metric_data = get_metrics(traj_data)
+        interp_metric_data = get_metrics(interp_traj_data)
 
-    print("No interpol: ", t_sp_list, "\navg=", np.mean(t_sp_list))
-    print("WITH interpol: ", interp_t_sp_list, "\navg=", np.mean(interp_t_sp_list))
-    
-    # dynamic_plot_sequence_and_gif(interp_traj_list, g, policy_1d, 
-    #                         vel_field_data, scalar_field_data,
-    #                         fpath, fname='Trajectories')
+    print("No interpol: ", )
+    # print("mean_travel_time, mean_en_cons, mean_net_en_cons, success_rate= ", metrics)
+    print("Success rate= ", metric_data[3])
+    print("\t ---")
+    print("Travel Time:")
+    print(" min:", np.min(metric_data[0]))
+    print(" max:", np.max(metric_data[0]))
+    print(" mean:", np.mean(metric_data[0]))
+    print("\t ---")
+    if prob_type == "energy1":
+        print("Energy Consumed:")
+        print(" min:", np.min(metric_data[1]))
+        print(" max:", np.max(metric_data[1]))
+        print(" mean:", np.mean(metric_data[1]))
+        print("\t ---")
+    if prob_type == "energy2":
+        print("Net Energy Consumed:")
+        print(" min:", np.min(metric_data[2]))
+        print(" max:", np.max(metric_data[2]))
+        print(" mean:", np.mean(metric_data[2]))
+        print("\t ---")
+
+
+    print("WITH interpol: ")
+    print("Success rate= ", metric_data[3])
+    print("\t ---")
+    print("Travel Time:")
+    print(" min:", np.min(metric_data[0]))
+    print(" max:", np.max(metric_data[0]))
+    print(" mean:", np.mean(metric_data[0]))
+    print("\t ---")
+    if prob_type == "energy1":
+        print("Energy Consumed:")
+        print(" min:", np.min(metric_data[1]))
+        print(" max:", np.max(metric_data[1]))
+        print(" mean:", np.mean(metric_data[1]))
+        print("\t ---")
+    if prob_type == "energy2":
+        print("Net Energy Consumed:")
+        print(" min:", np.min(metric_data[2]))
+        print(" max:", np.max(metric_data[2]))
+        print(" mean:", np.mean(metric_data[2]))
+        print("\t ---")
+
 
     print("plotting ans saving dynamic plot sequence...")
-    plot_interval = 2
+    plot_interval = 20
     print("with plot interval =", plot_interval)
-    dynamic_plot_sequence(interp_traj_list, g, policy_1d, 
-                            vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
-                            fpath, plot_interval, prob_type, fname='Trajectories')
+    # dynamic_plot_sequence(traj_data, interp_metric_data, g, policy_1d, 
+    #                         vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
+    #                         fpath, plot_interval, prob_type, fname='Trajectories')
     
     
     
