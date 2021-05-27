@@ -345,7 +345,7 @@ class plot_environment_fields:
             plt.show()
 
 
-prob_name = "DG3_g200x200x200_r5k_DynObs"
+prob_name = "DG3_g200x200x200_r5k_2LpDynObs"
 t = 1
 rzn_id = 0
 print("prob_name= ",prob_name)
@@ -374,4 +374,4 @@ plots.plot_coefs(rzn_list, save_fig=True)
 # plots.plot_obstacle(t)
 # # plots.plot_env_gif()
 # # plots.plot_env_sequence(rzn_id, plot_interval=30, show_contours="vel_mag")
-# plots.plot_env_sequence(rzn_id, plot_interval=30, show_contours="scalar_field")
+plots.plot_env_sequence(rzn_id, plot_interval=20, show_contours="scalar_field")

@@ -735,12 +735,14 @@ int main(){
     std::string prob_name;
     std::string prob_specs;
     std::string model_data_path;
+    std::string alpha_str;
     std::ifstream path_file;
     // read path from temp_path_file
     path_file.open("temp_modelOp_dirName.txt");
     std::getline(path_file, prob_type,'\n');
     std::getline(path_file, prob_name,'\n');
     std::getline(path_file, prob_specs,'\n');
+    std::getline(path_file, alpha_str,'\n');
     std::getline(path_file, model_data_path,'\n');
     path_file.close();
 
@@ -748,13 +750,22 @@ int main(){
                             + prob_type + "/" + prob_name ;
     std::string results_path = prob_name_path + "/" + prob_specs + "/";
 
+    std::string results_path_withAlpha = results_path + "/" + alpha_str + "/";
+
     std::cout << "CEHCK results_path =" << results_path << "\n";
     std::cout << prob_type << "\n" << prob_name << "\n" << prob_specs << "\n";
     s_stopping_thresh = 1e-1;
 
+
+
     //TODO: make common function and put in utils.h
     make_dir(prob_name_path);
     make_dir(results_path);
+
+    if(prob_type == "custom1"){
+        make_dir(results_path_withAlpha);
+        results_path = results_path_withAlpha;
+    }
     // int mkdir_status;
     // std::string comm_mkdir = "mkdir ";
     // std::string str = comm_mkdir + results_path;

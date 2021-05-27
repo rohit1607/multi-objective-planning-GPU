@@ -12,6 +12,7 @@
 #include <chrono>
 using namespace std::chrono;
 #include <iostream>
+#include <sstream>
 
 
 long long int ncells;
@@ -22,7 +23,7 @@ long long int ncells;
 */
 cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elements);
 void define_xs_or_ys(float* xs, float dx, float x0, int gsize);
-void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions, 
+void save_master_Coos_to_file(std::string op_FnamePfx,std::string op_FnamePfx_2, int num_actions, 
 thrust::host_vector<long long int> &H_master_cooS1, 
     thrust::host_vector<long long int> &H_master_cooS2, 
     thrust::host_vector<float> &H_master_cooVal,
@@ -230,10 +231,12 @@ __device__ float get_angle_in_0_2pi(float theta){
 __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float rad1, float rad2, float* params){
 
     int method = params[13];
+    float alpha = params[19];
     float Cr = 1;       // coeffecient for radaition term
     float Cf = 1;       // coeffecient for energy consumtion
     float Ct = 0.01;   // small coeffecient for time for to prevent lazy start
     float dt = params[4];
+    float energy_reward, time_reward;
 
     if (method == 0)    //time
         return -dt;
@@ -250,8 +253,14 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
         return ((Cr*(rad2 + rad1)/2)- Ct)*dt;
     }
 
+    else if (method == 4){
+        energy_reward = -(ac_speed*ac_speed)*dt;
+        time_reward = -dt;
+        return alpha*energy_reward + (1-alpha)*time_reward;
+    }
+
     else 
-        return 0;
+        return 0;   
 
 }
 
@@ -336,9 +345,12 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             *r += r_terminal;
         }
     else{
+            // //reaching any state in the last timestep which is not terminal is penalised
+            // if (T == nt-2)
+            //     *r += r_outbound; 
             //reaching any state in the last timestep which is not terminal is penalised
-            if (T == nt-2)
-                *r += r_outbound; 
+            if (T > nt-20)
+            *r += 0.05*r_outbound; 
         }
 
     }
@@ -889,6 +901,7 @@ int get_reward_type(std::string prob_type){
     // 1 for energy1
     // 2 for energy2
     // 3 for energy3
+    // 4 for custom1
 
     if (prob_type == "time")
         return 0;
@@ -898,7 +911,9 @@ int get_reward_type(std::string prob_type){
         return 2;
     else if (prob_type == "energy3")
         return 3;
-    else    
+    else if (prob_type == "custom1")
+        return 4;
+    else
         return -1;
 }
 
@@ -908,13 +923,28 @@ int get_reward_type(std::string prob_type){
 
 
 
-int main(){
+int main(int argc, char *argv[]){
 
+    // add input arguement part
     // -------------------- input data starts here ---------------------------------
 
 
     #include "input_to_build_model.h"
+
+    float alpha = alpha_header;
+
+    if(argc>1){
+        std::cout << alpha << " and " << argv[0] << " and " << argv[1] << "\n";
+        alpha = std::stof(argv[1]);
+        alpha = alpha/100;
+        // std::stringstream convert{ argv[2] };
+        // if(!(convert >> alpha)) alpha = 0;
+        std::cout << alpha << "\n";
+    }
+
+    std::cout << argc << "\n";
  
+    std::cout << alpha << " and " << argv[0] << " and " << argv[1] << "\n";
     int reward_type = get_reward_type(prob_type);
     std::cout << "Reward type: " << reward_type << "\n";
 
@@ -925,10 +955,22 @@ int main(){
     std::string op_Fname_upto_prob_name = "data_modelOutput/" + prob_type + "/"
                                  + prob_name + "/" ;
     std::string op_FnamePfx = op_Fname_upto_prob_name + prob_specs + "/"; //path for storing op npy data.
+
+    std::string op_Fname_withAlpha = op_FnamePfx + std::to_string(alpha) +"/";
+
+   make_dir(op_Fname_upto_prob_name);
+    make_dir(op_FnamePfx);
+
+    if(reward_type>3){
+        op_FnamePfx = op_Fname_withAlpha;
+        make_dir(op_FnamePfx);
+    }
+
     std::ofstream fout("temp_modelOp_dirName.txt");
     fout << prob_type << "\n";
     fout << prob_name << "\n";
     fout << prob_specs << "\n";
+    fout << std::to_string(alpha) << "\n";
     fout << op_FnamePfx;
     fout.close();
 
@@ -949,6 +991,7 @@ int main(){
     // make directory for storing output data from this file
     make_dir(op_Fname_upto_prob_name);
     make_dir(op_FnamePfx);
+
 
     int all_u_n_elms;
     int all_v_n_elms;
@@ -1006,6 +1049,7 @@ int main(){
     H_params[16] = dx;
     H_params[17] = dy;
     H_params[18] = neighb_gsize; // referred to as m in functions
+    H_params[19] = alpha;
 
     for( int i =20; i<32; i++)
         H_params[i] = z;
@@ -1167,7 +1211,16 @@ int main(){
     thrust::host_vector<long long int> H_master_cooS2(master_nnz);
     thrust::host_vector<float> H_master_cooVal(master_nnz);
     thrust::host_vector<float> H_master_R(ncells*nt*num_actions, -99999); //TODO: veriffy -99999
-    save_master_Coos_to_file(op_FnamePfx, num_actions,
+    std::string op_FnamePfx_2 = "data_solverOutput/" + prob_type + "/"
+    + prob_name + "/" + prob_specs + "/";
+    std::string op_Fname_withAlpha_2 = "data_solverOutput/" + prob_type + "/"
+    + prob_name + "/" + prob_specs + std::to_string(alpha) +"/";
+
+    if(reward_type>3){
+        op_FnamePfx_2 = op_Fname_withAlpha_2;
+    }
+
+    save_master_Coos_to_file(op_FnamePfx,op_FnamePfx_2, num_actions,
                                 H_master_cooS1, 
                                 H_master_cooS2, 
                                 H_master_cooVal,
@@ -1190,7 +1243,7 @@ int main(){
 
 
 
-void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
+void save_master_Coos_to_file(std::string op_FnamePfx, std::string op_FnamePfx_2, int num_actions,
     thrust::host_vector<long long int> &H_master_cooS1, 
     thrust::host_vector<long long int> &H_master_cooS2, 
     thrust::host_vector<float> &H_master_cooVal,
@@ -1255,6 +1308,8 @@ void save_master_Coos_to_file(std::string op_FnamePfx, int num_actions,
     cnpy::npy_save(op_FnamePfx + "master_R.npy", &H_master_R[0], {H_master_R.size(),1},"w");
     cnpy::npy_save(op_FnamePfx + "DP_relv_params.npy", &DP_relv_params[0], {num_DP_params,1},"w");
     cnpy::npy_save(op_FnamePfx + "prob_params.npy", &prob_params[0], {prob_params_size,1},"w");
+    // cnpy::npy_save(op_FnamePfx_2 + "prob_params.npy", &prob_params[0], {prob_params_size,1},"w");
+    std::cout << "saved files \n" ;
 
 }
 

@@ -11,8 +11,8 @@ file = open(r"temp_modelOp_dirName.txt","r")
 # read lines as string from file line by line
 file_lines = file.readlines()
 
-# 4th line contains address of model output
-prob_name = file_lines[3]
+# 5th line contains address of model output
+prob_name = file_lines[4]
 print("read line:\n", prob_name)
 
 

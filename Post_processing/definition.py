@@ -1,6 +1,6 @@
 import os
 # Project root
-ROOT_DIR = "/home/rohit/Documents/Research/e2e_GPU_DP"
+ROOT_DIR = "/home/rohitc/e2e_GPU_DP"
 print(ROOT_DIR)
 # increment N[s][a] by N_inc each time (s,a) visited
 N_inc = 0.005
