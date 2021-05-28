@@ -126,6 +126,7 @@ def fill_obstacles(obstacle_mask, final_gsize, nt, dyn_obstacle_data):
             rd = int(ru + obs_width)
             # if (cl == 0 or cl == final_gsize -1 or cr == 0 or cr == final_gsize -1 or ru == 0 or ru == final_gsize -1  or rd == 0 or rd == final_gsize -1):
             # if obstacle is in domain
+
             if (0 < cl < final_gsize-1) and (0 < cr < final_gsize-1) and (0 < ru < final_gsize-1) and (0 < rd < final_gsize-1):
                 obstacle_mask[t, ru:rd, cl:cr] = 1
             else:
@@ -166,6 +167,8 @@ def fill_obstacles(obstacle_mask, final_gsize, nt, dyn_obstacle_data):
                     obstacle_mask[t, 0:rd, cl:] = 1
                     obstacle_mask[t, ru:, 0:cr] = 1
                     obstacle_mask[t, 0:rd, 0:cr] = 1
+
+
 
     return obstacle_mask 
 

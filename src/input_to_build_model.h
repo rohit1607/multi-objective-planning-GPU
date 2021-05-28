@@ -1,4 +1,5 @@
 //Prob type: time, energy1, energy2, energy3
+
 std::string prob_type = "custom1"; //verify num_ac_speeds 
 std::string prob_name = "AF_DG_g50x50x50_r100_DynObs";
 
@@ -8,6 +9,7 @@ float alpha_header = 0.05; // 1 for only energy, 0 for only time
 int32_t nt = 50;
 float dt = 1;
 int32_t gsize = 50;
+
 float dx = 1; float dy = dx;
 
 float x0 = dx/2; //explain later

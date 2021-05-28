@@ -424,6 +424,7 @@ def plot_exact_trajectory_set_DP(g, policy_1d, X, Y, vel_field_data, scalar_fiel
         plt.contourf(X, Y, s_arr, cmap = "YlOrRd_r", alpha = 0.5, zorder = -1e5)
 
 
+
     print("Trajectory plot: Starting rzn loop")
     for rzn in range(nrzns):
         success = None
@@ -667,6 +668,7 @@ def dynamic_plot_sequence_and_gif(traj_list, g, policy_1d,
 def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d, 
                             vel_field_data, scalar_field_data,nrzns, nrzns_to_plot,
                             fpath, plot_interval, prob_type, plot_at_t =None, fname='Trajectories'):
+
                             
     # traj_list = [ (xtr, ytr, success, travel_time, energy_cons, net_energy_cons), (), ()... ]
     plot_seq_path = join(fpath, "plot_sequence")
@@ -677,6 +679,7 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
     rzn_list = [i for i in range(nrzns)]
 
     travel_time_list, energy_cons_list, energy_col_list, net_energy_cons_list, success_rate = metric_data
+
     cmap = plt.get_cmap('plasma')
     if prob_type == "time":
         vmin, vmax = np.min(travel_time_list), np.max(travel_time_list)
@@ -684,16 +687,20 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
         vmin, vmax = np.min(energy_cons_list), np.max(energy_cons_list)
     if prob_type == "energy2":
         vmin, vmax = np.min(net_energy_cons_list), np.max(net_energy_cons_list)
+
     if prob_type == "energy3":
         vmin, vmax = np.min(energy_col_list), np.max(energy_col_list)
     if prob_type == "custom1":
         vmin, vmax = np.min(energy_cons_list), np.max(energy_cons_list)
+
     cNorm = colors.Normalize(vmin=vmin, vmax=vmax)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
     scalarMap._A = []
 
     for t in range(g.nt):
+
         if ((plot_at_t==None) and (t%plot_interval == 0 or t==1 or t == np.max(metric_data[0]) or t == nt-1)) or ((plot_at_t != None) and (t in plot_at_t or t==1)):
+
             print("t=",t)
             fig = plt.figure(figsize=(10, 10))
             ax = fig.add_subplot(1, 1, 1)
@@ -720,6 +727,7 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
 
             for k in rzn_list:
                 # print("rzn",k)
+
                 xtr, ytr, success, travel_time, energy_cons, energy_col, net_energy_cons = traj_list[k]
                 # print("check xtr", xtr)
                 if success == True:
@@ -744,7 +752,6 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
                 cbar = plt.colorbar(scalarMap)
                 cbar.ax.tick_params(labelsize=20) 
 
-                
             filename = join(plot_seq_path, fname) + "@t" + str(t) + ".png"
             plt.savefig(filename, bbox_inches = "tight", dp = 300)
             plt.clf()
@@ -769,6 +776,7 @@ def get_refd_startpos_list(startpos, tsgsize):
 def get_metrics(traj_data):
     # traj_data = (xtr, ytr, success, travel_time, energy_cons, net_energy_cons)
     sum_success = 0
+
     travel_time_list = []
     energy_cons_list = []
     energy_col_list = []
@@ -776,10 +784,12 @@ def get_metrics(traj_data):
     success_list = []
     for traj in traj_data:
         _, _, success, travel_time, energy_cons, energy_col, net_energy_cons = traj
+
         if success == True:
             sum_success += 1
             travel_time_list.append(travel_time)
             energy_cons_list.append(energy_cons)
+
             energy_col_list.append(energy_col)
             net_energy_cons_list.append(net_energy_cons)
     success_rate = sum_success/len(traj_data)
@@ -813,6 +823,7 @@ def write_log(metric_data, prob_list, design_param):
         f_object.close()
 
     return
+
 
 
 
@@ -933,6 +944,8 @@ if __name__ == "__main__":
         #                             show_field_at_t_r=(0,0),
         #                             show_scalar_field_at_t_r=(0,0))
 
+
+
         interp_traj_data = plot_exact_trajectory_set_DP(g, policy_1d, X, Y, 
                                     vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
                                     fpath,
@@ -942,6 +955,7 @@ if __name__ == "__main__":
                                     show_interp_policy_of_traj = False,
                                     show_field_at_t_r=(0,0),
                                     show_scalar_field_at_t_r=(0,0))
+
 
         interp_traj_data_np = np.array(interp_traj_data, dtype=object)
         np.save(join(fpath,'interp_traj_data'), interp_traj_data_np, allow_pickle=True)
@@ -1031,8 +1045,9 @@ if __name__ == "__main__":
 
 #  just for plotting traj_data assuming it has already bin saved.
 
+
     print("plotting ans saving dynamic plot sequence...")
-    plot_interval = 2
+    plot_interval = 20
     print("with plot interval =", plot_interval)
     interp_traj_data = np.load(join(fpath,'interp_traj_data.npy'),allow_pickle=True)
     interp_metric_data = get_metrics(interp_traj_data)
@@ -1044,7 +1059,7 @@ if __name__ == "__main__":
     dynamic_plot_sequence(interp_traj_data, interp_metric_data, g, policy_1d, 
                             vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
                             fpath, plot_interval, prob_type, plot_at_t=None, fname='Trajectories')
-    
+
     
 
 
