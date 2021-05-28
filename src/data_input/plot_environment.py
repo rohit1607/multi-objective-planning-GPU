@@ -359,6 +359,7 @@ class plot_environment_fields:
             plt.show()
 
 
+
     def coeff_pair_plots(self,t, save_fig=True, show_fig=False):
         coeffs = self.all_Yi[t,:,0:4]
         df = pd.DataFrame(coeffs, columns = ['Coef. 1','Coef. 2','Coef. 3','Coef. 4'])
@@ -384,6 +385,7 @@ class plot_environment_fields:
 
 
 prob_name = "DG3_g200x200x200_r5k_2LpDynObs_v2"
+
 t = 1
 rzn_id = 0
 print("prob_name= ",prob_name)
@@ -413,5 +415,4 @@ for t in [1, 60, 120 , 180]:
 # plots.plot_obstacle(t)
 # # plots.plot_env_gif()
 # # plots.plot_env_sequence(rzn_id, plot_interval=30, show_contours="vel_mag")
-plots.plot_env_sequence(rzn_id, plot_interval=60, show_contours="scalar_field")
-# plots.plot_env_sequence(rzn_id, plot_interval=100, show_contours="vel_mag")
+plots.plot_env_sequence(rzn_id, plot_interval=20, show_contours="scalar_field")

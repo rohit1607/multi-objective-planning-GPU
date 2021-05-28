@@ -169,6 +169,7 @@ def fill_obstacles(obstacle_mask, final_gsize, nt, dyn_obstacle_data):
                     obstacle_mask[t, 0:rd, 0:cr] = 1
 
 
+
     return obstacle_mask 
 
 
