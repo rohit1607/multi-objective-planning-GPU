@@ -737,6 +737,7 @@ int main(){
     std::string model_data_path;
     std::string alpha_str;
     std::ifstream path_file;
+    std::ofstream time_file;
     // read path from temp_path_file
     path_file.open("temp_modelOp_dirName.txt");
     std::getline(path_file, prob_type,'\n');
@@ -766,6 +767,14 @@ int main(){
         make_dir(results_path_withAlpha);
         results_path = results_path_withAlpha;
     }
+    if(prob_type == "custom2"){
+        make_dir(results_path_withAlpha);
+        results_path = results_path_withAlpha;
+    }
+    if(prob_type == "custom3"){
+        make_dir(results_path_withAlpha);
+        results_path = results_path_withAlpha;
+    }
     // int mkdir_status;
     // std::string comm_mkdir = "mkdir ";
     // std::string str = comm_mkdir + results_path;
@@ -789,6 +798,11 @@ int main(){
     std::cout << "saving policy and value funtion\n";
     cnpy::npy_save(results_path + "policy.npy", &p_out_policy_vec[0], {p_out_policy_vec.size(),1},"w");
     cnpy::npy_save(results_path + "value_function.npy", &p_out_value_func_vec[0], {p_out_value_func_vec.size(),1},"w");
+
+    time_file.open("temp_runTime.txt", std::ios::app);
+    time_file << duration_t.count()/1e6 << "\n";
+    time_file.close();
+
 
 
     return 0;

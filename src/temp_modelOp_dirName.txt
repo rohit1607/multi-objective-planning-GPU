@@ -1,0 +1,5 @@
+custom1
+DG3_g200x200x200_r5k_DynObs
+a2x16_i30_j80_ref2
+1.000000
+data_modelOutput/custom1/DG3_g200x200x200_r5k_DynObs/a2x16_i30_j80_ref2/1.000000/

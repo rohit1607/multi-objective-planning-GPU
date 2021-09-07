@@ -13,6 +13,7 @@
 using namespace std::chrono;
 #include <iostream>
 #include <sstream>
+#include <fstream>
 
 
 long long int ncells;
@@ -249,15 +250,28 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
         return ((Cr*(rad2 + rad1)/2) - (Cf*ac_speed*ac_speed) - Ct)*dt;
     }
 
-    else if (method == 3){
+    else if (method == 3){  // energy3: maximise (collection)
         return ((Cr*(rad2 + rad1)/2)- Ct)*dt;
     }
 
-    else if (method == 4){
-        energy_reward = -(ac_speed*ac_speed)*dt;
+    else if (method == 4){  // custom1: energy consumption vs time optimal front
+        energy_reward = -(Cf*(ac_speed*ac_speed)+Ct)*dt;
         time_reward = -dt;
         return alpha*energy_reward + (1-alpha)*time_reward;
     }
+
+    else if (method == 5){  // custom2: energy (collected-consumed) vs time
+        energy_reward = (((rad2 + rad1)/2) - ac_speed*ac_speed - Ct)*dt;
+        time_reward = -dt;
+        return alpha*energy_reward + (1-alpha)*time_reward;
+    }
+
+    else if (method == 6){  // custom3: energy collected vs time
+        energy_reward = (((rad2+rad1)/2) - Ct)*dt;
+        time_reward = -dt;
+        return alpha*energy_reward + (1-alpha)*time_reward;
+    }
+
 
     else 
         return 0;   
@@ -913,6 +927,10 @@ int get_reward_type(std::string prob_type){
         return 3;
     else if (prob_type == "custom1")
         return 4;
+    else if (prob_type == "custom2")
+        return 5;
+    else if (prob_type == "custom3")
+        return 6;
     else
         return -1;
 }
@@ -931,12 +949,16 @@ int main(int argc, char *argv[]){
 
     #include "input_to_build_model.h"
 
+    auto start_build = high_resolution_clock::now();
+    auto end_build = high_resolution_clock::now();
+    auto build_t = duration_cast<microseconds>(end_build - start_build);
+
     float alpha = alpha_header;
 
     if(argc>1){
         std::cout << alpha << " and " << argv[0] << " and " << argv[1] << "\n";
         alpha = std::stof(argv[1]);
-        alpha = alpha/100;
+        alpha = alpha/1000;
         // std::stringstream convert{ argv[2] };
         // if(!(convert >> alpha)) alpha = 0;
         std::cout << alpha << "\n";
@@ -987,11 +1009,13 @@ int main(int argc, char *argv[]){
 
     // -------------------- input data ends here ---------------------------------
 
+    
 
     // make directory for storing output data from this file
     make_dir(op_Fname_upto_prob_name);
     make_dir(op_FnamePfx);
 
+    auto start_build_only = high_resolution_clock::now();
 
     int all_u_n_elms;
     int all_v_n_elms;
@@ -1206,6 +1230,11 @@ int main(int argc, char *argv[]){
     // print_array<long long int>(&H_Aarr_of_cooS2[0][0], 10,  "H_Aarr_of_cooS2[0]", " ");
 
 
+
+    auto end_build_only = high_resolution_clock::now(); // end build only
+    auto time_build_only = duration_cast<microseconds>(end_build_only - start_build_only);  // time build only
+
+
     // save final coo data
     thrust::host_vector<long long int> H_master_cooS1(master_nnz);
     thrust::host_vector<long long int> H_master_cooS2(master_nnz);
@@ -1232,6 +1261,20 @@ int main(int argc, char *argv[]){
                                 H_params,
                                 DP_relv_params,
                                 num_DP_params);
+
+
+    end_build = high_resolution_clock::now();
+    build_t = duration_cast<microseconds>(end_build - start_build); 
+
+
+    
+
+    std::ofstream fout_time("temp_runTime.txt");
+    fout_time << build_t.count()/1e6 << "\n";
+
+    fout_time << time_build_only.count()/1e6 << "\n";
+
+    fout_time.close();
 
 
     return 0;

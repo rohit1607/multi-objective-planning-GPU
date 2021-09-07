@@ -48,6 +48,10 @@ if __name__ == "__main__":
         arr_time[i] = data['time_mean'][len(data)-1-number+i]
         arr_energy[i] = data['reqd_energy_mean'][len(data)-1-number+i]  
     
+    start = float(format(data['alpha_param'][len(data)-1-number], ".3f"))
+    end = float(format(data['alpha_param'][len(data)-1], ".3f"))
+    delta = float(format((end-start)/(number), ".3f"))
+
     plt.plot(arr_time, arr_energy, marker = 'o')
     plt.xlabel("Avg. Time Required")
     plt.ylabel("Avg. Energy Required")
@@ -55,8 +59,12 @@ if __name__ == "__main__":
 
 
     mypath = os.path.abspath(__file__)
+    print(mypath)
     filepath = "data_solverOutput/" + prob_type + "/" + prob_name + "/" + prob_specs + "/"
-    filename = "pareto_" + str(number) + ".png"
+    print(filepath)
+    filename = "pareto_" + str(start) + "_" + str(delta) + "_" + str(end) + ".png"
+    print(filename)
+    plt.show()
     plt.savefig(filepath + filename, bbox_inches = "tight", dp = 300)
     plt.clf()
     plt.close() 

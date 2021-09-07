@@ -139,6 +139,12 @@ class plot_environment_fields:
         cb=''
         self.setup_grid_in_plot(fig, ax)
 
+        myticks = [0, 25, 50, 75, 100]
+        xyticks = np.array([0, 0.5, 1.0, 1.5, 2.0])
+        plt.xticks(xyticks, myticks, fontsize=30)
+        plt.yticks(xyticks, myticks, fontsize=30)
+
+
         for m in range(self.nmodes):
             matmul_ui_Yi_t += (self.all_ui_mat[t,m,:,:]*self.all_Yi[t,k,m])
             matmul_vi_Yi_t += (self.all_vi_mat[t,m,:,:]*self.all_Yi[t,k,m])
@@ -274,7 +280,8 @@ class plot_environment_fields:
                 ax = fig.add_subplot(1, 1, 1)
                 self.setup_grid_in_plot(fig, ax)
                 # title = "bg_"+ show_contours+ " t = " + str(t)
-                # plt.title(title)
+                #title = " t = " + str(t)
+                #plt.title(title, fontsize=30)
 
                 print(t, end='\t')
                 matmul_ui_Yi_t = 0
@@ -301,12 +308,18 @@ class plot_environment_fields:
                     if show_contours == "vel_mag":
                         vel_mag_t_k = (u_t_k**2 + v_t_k**2)**0.5 #velocity magnitude at t,k
                         plt.contourf(self.X, self.Y, vel_mag_t_k, cmap = 'Blues')
-                # cbar = plt.colorbar()
-                # cbar.ax.tick_params(labelsize=self.num_fontsize) 
+                #cbar = plt.colorbar()
+                #cbar.ax.tick_params(labelsize=self.num_fontsize) 
+
+                myticks = [0, 25, 50, 75, 100]
+                xyticks = np.array([0, 0.5, 1.0, 1.5, 2.0])
+
+                plt.xticks(xyticks, myticks, fontsize=30)
+                plt.yticks(xyticks, myticks, fontsize=30)
 
                 self.plot_obstacle(t)
-                fname_pfx = "bg_"+ show_contours+ "env"
-                fname = join(plot_seq_path, fname_pfx) + "@t" + str(t) + ".png"
+                fname_pfx = show_contours+ "env"
+                fname = join(plot_seq_path, fname_pfx) + "_new_" + "@t" + str(t) + ".png"
                 plt.savefig(fname,bbox_inches = "tight", dpi =300)
                 plt.clf()
                 plt.close()
@@ -318,17 +331,22 @@ class plot_environment_fields:
 
         minor_ticks = [i*self.dxy/1 for i in range(0, self.gsize + 1, 10)]
         major_ticks = [i*self.dxy/1 for i in range(0, self.gsize + 1, 40)]
+        myticks = [0, 25, 50, 75, 100]
+        xyticks = np.array([0, 0.5, 1.0, 1.5, 2.0])
 
-        ax.set_xticks(minor_ticks, minor=True)
-        ax.set_xticks(major_ticks, minor=False)
-        ax.set_yticks(major_ticks, minor=False)
-        ax.set_yticks(minor_ticks, minor=True)
+        #ax.xticks(xyticks, myticks)
+        #ax.xticks(xyticks, myticks)
+
+        #ax.set_xticks(minor_ticks, minor=True)
+        #ax.set_xticks(major_ticks, minor=False)
+        #ax.set_yticks(major_ticks, minor=False)
+        #ax.set_yticks(minor_ticks, minor=True)
 
         # ax.grid(b= True, which='both', color='#CCCCCC', axis='both',linestyle = '-', alpha = 0.5, zorder = -1e6)
         ax.tick_params(axis='both', which='both', labelsize=self.num_fontsize)
 
-        ax.set_xlabel('X (Non-Dim)', fontsize=22)
-        ax.set_ylabel('Y (Non-Dim)', fontsize=22)
+        ax.set_xlabel('X (Non-Dim)', fontsize=30)
+        ax.set_ylabel('Y (Non-Dim)', fontsize=30)
 
     def plot_coefs(self, rzn_list, save_fig= True, show_fig=True):
         # rzn_list is a list of rzn_ids for which you want to plot the coeffs
@@ -384,7 +402,7 @@ class plot_environment_fields:
 
 
 
-prob_name = "DG3_g200x200x200_r5k_2LpDynObs_v2"
+prob_name = "DG3_g100x100x120_r5k_vmax6_2LpDynObs"
 
 t = 1
 rzn_id = 0
@@ -397,10 +415,10 @@ rzn_list = [int(600)*i for i in range(8)]
 # plots.plot_coefs(rzn_list, save_fig=True)
 
 # for t in [i for i in range(1,150,40)]:
-for t in [1, 60, 120 , 180]:
+for t in [0, 40, 80 , 119]:
     # plots.coeff_pair_plots(t, save_fig=True, show_fig=False)
-    plots.plot_modes(t,save_fig=True, show_fig=False, show_colorbar=True)
-#     plots.plot_vel_field(t, rzn_id, show_contours="vel_mag", show_colorbar=False, show_obstacle=False, save_fig=True, show_fig=False)
+#    plots.plot_modes(t,save_fig=True, show_fig=False, show_colorbar=True)
+    plots.plot_vel_field(t, rzn_id, show_contours="vel_mag", show_colorbar=False, show_obstacle=True, save_fig=True, show_fig=False)
 #     plots.plot_mean_vel_field(t, rzn_id, show_contours="vel_mag", show_colorbar=False, show_obstacle=False, save_fig=True, show_fig=False)
 
 # # # plots.plot_modes(t,save_fig=True)

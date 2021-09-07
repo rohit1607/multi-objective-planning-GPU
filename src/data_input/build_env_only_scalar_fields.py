@@ -41,8 +41,8 @@ class DG_scalar_field:
         # term2 = (1 - 2*self.eps*sin(w*t)) * x
         T = t*self.interpolate_degree/2
         l = self.xs[-1]/2
-        high_val = 1
-        low_val = 0
+        high_val = 0
+        low_val = 1
         dom_size = self.xs[-1] + self.dxy
         if ((x + (T*self.dxy)) <= l):
             return high_val
