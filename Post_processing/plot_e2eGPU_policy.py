@@ -856,7 +856,7 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
             ax = fig.add_subplot(1, 1, 1)
             setup_grid_in_plot(fig, ax, g)
             title = "t = " + str(t)
-            #plt.title(title, fontsize=40)
+            plt.title(title, fontsize=40)
 
             xt = np.array([0,25,50,75,100])
             plt.xticks(xt, fontsize=30)
@@ -910,7 +910,7 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
                 cbar = plt.colorbar(scalarMap)
                 cbar.ax.tick_params(labelsize=20) 
 
-            filename = join(plot_seq_path, fname) + "@t" + str(t) + "_paper"+".png"
+            filename = join(plot_seq_path, fname) + "_newT_@t" + str(t) + "_paper"+".png"
             plt.savefig(filename, bbox_inches = "tight", dp = 300)
             plt.clf()
             plt.close()
@@ -1232,7 +1232,7 @@ if __name__ == "__main__":
 ##################################### CHANGED ############# COMMENTED OUT #######################
 
     print("plotting and saving dynamic plot sequence...")
-    plot_interval = 40
+    plot_interval = 2
     print("with plot interval =", plot_interval)
     interp_traj_data = np.load(join(fpath,'interp_traj_data.npy'),allow_pickle=True)
     interp_metric_data = get_metrics(interp_traj_data)
@@ -1243,7 +1243,7 @@ if __name__ == "__main__":
 
     dynamic_plot_sequence(interp_traj_data, interp_metric_data, g, policy_1d, 
                             vel_field_data, scalar_field_data, nrzns, nrzns_to_plot,
-                            fpath, plot_interval, prob_type, plot_at_t=plot_at_ts, fname='Trajectories')
+                            fpath, plot_interval, prob_type, plot_at_t=None, fname='Trajectories')
 
     
 
