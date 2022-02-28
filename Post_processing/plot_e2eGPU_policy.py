@@ -602,6 +602,8 @@ def plot_learned_policy(g, policy_1d, vel_field_data, scalar_field_data,
     return
 
 
+
+# Use this function for obtaining time only (NO PLOTS GENERATED)
 def plot_exact_trajectory_set_DP_dummy(g, policy_1d, X, Y, vel_field_data, scalar_field_data,
                                 nrzns, nrzns_to_plot, fpath,
                                 fname='Trajectories', 

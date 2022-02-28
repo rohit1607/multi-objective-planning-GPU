@@ -1,10 +1,10 @@
 #!/bin/bash
 
 i=-1
-alpha=550
-number=9
-#del=$(( 1000/number ))
-del=50
+alpha=0
+number=20
+del=$(( 1000/number ))  # alpha scaled from 0 to 1000
+#del=50
 #number=1
 
 # integers 0 to 100 are used instead between 0 to 1
@@ -18,6 +18,6 @@ do
     (( i++ ))
 done
 
-number=20
+#number=20
 
 python3 plot_optimal_front.py $number #(number argument for number of divisions )
