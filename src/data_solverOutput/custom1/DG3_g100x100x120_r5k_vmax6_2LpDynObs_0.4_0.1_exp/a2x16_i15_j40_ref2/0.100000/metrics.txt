@@ -1,0 +1,9 @@
+No interpol: WITH interpol: Success rate= 0.9994
+ ---Travel Time:
+ min:36
+ max:44
+ mean:37.379427656593954
+ ---Energy Consumed: min:110.95721891328019
+ max:127.17569475533693
+ mean:116.09584452898083
+ ---

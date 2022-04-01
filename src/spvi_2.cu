@@ -775,6 +775,10 @@ int main(){
         make_dir(results_path_withAlpha);
         results_path = results_path_withAlpha;
     }
+    if(prob_type == "custom4"){
+        make_dir(results_path_withAlpha);
+        results_path = results_path_withAlpha;
+    }
     // int mkdir_status;
     // std::string comm_mkdir = "mkdir ";
     // std::string str = comm_mkdir + results_path;

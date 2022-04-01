@@ -272,6 +272,12 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
         return alpha*energy_reward + (1-alpha)*time_reward;
     }
 
+    else if (method == 7){  // product based scalarisation
+        energy_reward = (Cf*(ac_speed*ac_speed)+Ct)*dt;
+        time_reward = dt;
+        
+        return -1*pow(energy_reward,alpha)*pow(time_reward,1-alpha);
+    }
 
     else 
         return 0;   
@@ -931,6 +937,8 @@ int get_reward_type(std::string prob_type){
         return 5;
     else if (prob_type == "custom3")
         return 6;
+    else if (prob_type == "custom4")
+        return 7;
     else
         return -1;
 }

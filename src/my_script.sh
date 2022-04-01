@@ -2,7 +2,7 @@
 
 i=-1
 alpha=0
-number=20
+number=5
 del=$(( 1000/number ))  # alpha scaled from 0 to 1000
 #del=50
 #number=1

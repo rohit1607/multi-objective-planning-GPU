@@ -78,7 +78,7 @@ if __name__ == "__main__":
         for i in range(21):
             time.append(data[i][j,3])
             net_energy.append(data[i][j,6])
-        plt.scatter(time, net_energy, marker = 'o', alpha = 0.5, c=arr_alpha, cmap=cmap)
+        plt.scatter(time, net_energy, marker = 'o', alpha=0.005, c=arr_alpha, cmap=cmap)
 
     time = []
     net_energy = []

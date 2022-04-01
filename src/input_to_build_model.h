@@ -1,21 +1,21 @@
 //Prob type: time, energy1, energy2, energy3
 
 std::string prob_type = "custom1"; //verify num_ac_speeds 
-std::string prob_name = "DG3_g200x200x200_r5k_DynObs";
+std::string prob_name = "DG3_g100x100x120_r5k_vmax6_2LpDynObs_0.4_0.1_exp_3s_2r";
 
 float alpha_header = 0.05; // 1 for only energy, 0 for only time
-// extern float alpha;
+//extern float alpha;
 
-int32_t nt = 200;
+int32_t nt = 120;
 float dt = 1;
-int32_t gsize = 200;
+int32_t gsize = 100;
 
 float dx = 1; float dy = dx;
 
 float x0 = dx/2; //explain later
 float y0 = dy/2;
 
-float F = 2;
+float F = 1.8;
 int num_ac_speeds = 2; //verify prob_type
 int num_ac_angles = 16;
 int32_t num_actions = num_ac_speeds*num_ac_angles;

@@ -402,7 +402,7 @@ class plot_environment_fields:
 
 
 
-prob_name = "DG3_g100x100x120_r5k_vmax6_2LpDynObs"
+prob_name = "DG3_g100x100x120_r5k_vmax6_2LpDynObs_0.4_0.1_exp_3s_2r"
 
 t = 1
 rzn_id = 0
@@ -433,4 +433,4 @@ for t in [0, 40, 80 , 119]:
 # plots.plot_obstacle(t)
 # # plots.plot_env_gif()
 # # plots.plot_env_sequence(rzn_id, plot_interval=30, show_contours="vel_mag")
-plots.plot_env_sequence(rzn_id, plot_interval=20, show_contours="scalar_field")
+plots.plot_env_sequence(rzn_id, plot_interval=2, show_contours="scalar_field")

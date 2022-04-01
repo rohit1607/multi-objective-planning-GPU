@@ -1,5 +1,5 @@
 custom1
-DG3_g200x200x200_r5k_DynObs
-a2x16_i30_j80_ref2
+DG3_g100x100x120_r5k_vmax6_2LpDynObs_0.4_0.1_exp_3s_2r
+a2x16_i15_j40_ref2
 1.000000
-data_modelOutput/custom1/DG3_g200x200x200_r5k_DynObs/a2x16_i30_j80_ref2/1.000000/
+data_modelOutput/custom1/DG3_g100x100x120_r5k_vmax6_2LpDynObs_0.4_0.1_exp_3s_2r/a2x16_i15_j40_ref2/1.000000/

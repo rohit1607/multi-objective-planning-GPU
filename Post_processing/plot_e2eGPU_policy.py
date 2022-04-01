@@ -842,6 +842,8 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
         vmin, vmax = np.min(net_energy_cons_list), np.max(net_energy_cons_list)
     if prob_type == "custom3":
         vmin, vmax = np.min(energy_col_list), np.max(energy_col_list)
+    if prob_type == "custom4":
+        vmin, vmax = np.min(energy_cons_list), np.max(energy_cons_list)
 
     vmin = 40
     vmax = 200
@@ -850,8 +852,9 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
     scalarMap._A = []
 
     for t in range(g.nt):
-
-        if ((plot_at_t==None) and (t%plot_interval == 0 or t==1 or t == np.max(metric_data[0]) or t == nt-1)) or ((plot_at_t != None) and (t in plot_at_t or t==1)):
+        #### this has been capped for t = 60 units
+        # (((plot_at_t==None) and (t%plot_interval == 0 or t==1 or t == np.max(metric_data[0]) or t == nt-1)) or ((plot_at_t != None) and (t in plot_at_t or t==1)) and t < 60)
+        if (((plot_at_t==None) and (t%plot_interval == 0 or t==1 or t == np.max(metric_data[0]) or t == nt-1)) or ((plot_at_t != None) and (t in plot_at_t or t==1)) and t < 60):
 
             print("t=",t)
             fig = plt.figure(figsize=(10, 10))
@@ -874,12 +877,13 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
             #plt.quiver(x_list, y_list, vx_list, vy_list, color = 'c', alpha = 0.5)
 
             s_arr = func_show_scalar_field((t,0), scalar_field_data, g, gsize, xy_list=xy_list)
-            if prob_type == str('energy1') or prob_type == str('time') or prob_type == str('custom1'):
+            if prob_type == str('energy1') or prob_type == str('time') or prob_type == str('custom1') or prob_type == str('custom4'):
                 vel_mag = (vx_grid**2 + vy_grid**2)**0.5
+                print(np.amax(vel_mag))
                 plt.contourf(X, Y, vel_mag, cmap = "Blues", zorder = -1e5)
             else:
                 plt.contourf(X, Y, s_arr, cmap = "YlOrRd_r", alpha = 0.45, zorder = -1e5)
-            # plt.colorbar()
+            plt.colorbar()
 
             for k in rzn_list:
                 # print("rzn",k)
@@ -901,6 +905,8 @@ def dynamic_plot_sequence(traj_list, metric_data, g, policy_1d,
                         colorval = scalarMap.to_rgba(net_energy_cons)
                     if prob_type == "custom3":
                         colorval = scalarMap.to_rgba(energy_col)
+                    if prob_type == "custom4":
+                        colorval = scalarMap.to_rgba(energy_cons)                        
                     try:
                         # colorval = scalarMap.to_rgba(len_list[k])
                         plt.plot(xtr[0:t+1], ytr[0:t+1], linewidth=1, color=colorval, zorder = 1e4)
@@ -1063,7 +1069,7 @@ if __name__ == "__main__":
 
     # read policy
 
-    if prob_type == "custom1" or prob_type == "custom2" or prob_type == "custom3":
+    if prob_type == "custom1" or prob_type == "custom2" or prob_type == "custom3" or prob_type == "custom4":
         fpath = join(ROOT_DIR, "src/data_solverOutput/" + prob_type + "/" + prob_name + "/" + prob_specs + "/" + alpha_str + "/")
     else:
         fpath = join(ROOT_DIR, "src/data_solverOutput/" + prob_type + "/" + prob_name + "/" + prob_specs + "/")
@@ -1176,6 +1182,12 @@ if __name__ == "__main__":
             print(" max:", np.max(metric_data[1]))
             print(" mean:", np.mean(metric_data[1]))
             print("\t ---")
+        if prob_type == "custom4":
+            print("Energy Consumed:")
+            print(" min:", np.min(metric_data[1]))
+            print(" max:", np.max(metric_data[1]))
+            print(" mean:", np.mean(metric_data[1]))
+            print("\t ---")
     except:
         pass
 
@@ -1224,6 +1236,12 @@ if __name__ == "__main__":
             print(" max:", np.max(interp_metric_data[2]))
             print(" mean:", np.mean(interp_metric_data[2]))
             print("\t ---")
+        if prob_type == "custom4":
+            print("Net Energy Consumed:")
+            print(" min:", np.min(interp_metric_data[2]))
+            print(" max:", np.max(interp_metric_data[2]))
+            print(" mean:", np.mean(interp_metric_data[2]))
+            print("\t ---")
     except:
         pass
 
@@ -1234,7 +1252,7 @@ if __name__ == "__main__":
 ##################################### CHANGED ############# COMMENTED OUT #######################
 
     print("plotting and saving dynamic plot sequence...")
-    plot_interval = 2
+    plot_interval = 5
     print("with plot interval =", plot_interval)
     interp_traj_data = np.load(join(fpath,'interp_traj_data.npy'),allow_pickle=True)
     interp_metric_data = get_metrics(interp_traj_data)
@@ -1313,6 +1331,15 @@ if __name__ == "__main__":
                 file1.write("\n")
                 file1.write(" mean:"+str( np.mean(metric_data[1])))
                 file1.write("\n ---")
+            if prob_type == "custom4":
+                file1.write("Energy Consumed:")
+                file1.write("\n")
+                file1.write(" min:"+str( np.min(metric_data[1])))
+                file1.write("\n")
+                file1.write(" max:"+str( np.max(metric_data[1])))
+                file1.write("\n")
+                file1.write(" mean:"+str( np.mean(metric_data[1])))
+                file1.write("\n ---")
         except:
             pass
 
@@ -1361,6 +1388,14 @@ if __name__ == "__main__":
                 file1.write(" mean:"+str( np.mean(interp_metric_data[1])))
                 file1.write("\n ---")
             if prob_type == "custom2":
+                file1.write("Energy Consumed:")
+                file1.write(" min:"+str( np.min(interp_metric_data[1])))
+                file1.write("\n")
+                file1.write(" max:"+str( np.max(interp_metric_data[1])))
+                file1.write("\n")
+                file1.write(" mean:"+str( np.mean(interp_metric_data[1])))
+                file1.write("\n ---")
+            if prob_type == "custom4":
                 file1.write("Energy Consumed:")
                 file1.write(" min:"+str( np.min(interp_metric_data[1])))
                 file1.write("\n")
